@@ -358,7 +358,7 @@ const API_KEY      = '8305979203083184f47df530e707c2c9';
 const API_BASE     = 'https://v3.football.api-sports.io';
 const WC_LEAGUE    = 1;
 const WC_SEASON    = 2026;
-const COMM_PW      = 'Karen84$';
+const COMM_PW      = 'jahluvSegovia83$';
 const DRAFT_OPEN   = new Date('2026-06-02T12:00:00-04:00');
 
 const { createClient } = supabase;
@@ -560,11 +560,10 @@ function renderLeagues(){
   if(!S.leagues.length){ el.innerHTML='<div style="color:var(--muted);font-size:13px;padding:12px 0">No leagues yet. Commissioner login to create them.</div>'; return; }
   const past=new Date()>=DRAFT_OPEN;
   el.innerHTML=S.leagues.map(l=>{
-    const open=l.draft_open&&past;
     const bc=!l.draft_open?'b-closed':past?'b-open':'b-soon';
-    const bt=!l.draft_open?'CLOSED':past?'OPEN':'OPENS JUNE 2';
+    const bt=!l.draft_open?'CLOSED':past?'DRAFT OPEN':'REGISTER NOW';
     return `<button class="ll-btn" onclick="enterLeague('${l.id}')">
-      <div><div class="ll-name">${l.name}</div><div class="ll-meta">${l.draft_mode.toUpperCase()} DRAFT · Max ${l.max_participants}</div></div>
+      <div><div class="ll-name">${l.name}</div><div class="ll-meta">${l.draft_mode.toUpperCase()} DRAFT · Max ${l.max_participants}${!past?' · Teams open now':''}</div></div>
       <span class="badge ${bc}">${bt}</span>
     </button>`;
   }).join('');
@@ -585,8 +584,17 @@ async function enterLeague(id){
   S.currentLeague=l;
   if(!l.draft_open){ alert('This league\'s draft is closed by the commissioner.'); return; }
   const saved=localStorage.getItem('p_'+l.id);
-  if(saved){ S.currentParticipant=JSON.parse(saved); await loadParts(); renderGame(); showS('game'); return; }
-  if(new Date()<DRAFT_OPEN){ alert('Draft opens June 2, 2026 once FIFA confirms all 48 rosters!'); return; }
+  if(saved){
+    S.currentParticipant=JSON.parse(saved);
+    await loadParts();
+    // If registered but player draft not done and June 2 has passed, prompt to complete
+    if(S.currentParticipant.players.length===0 && new Date()>=DRAFT_OPEN){
+      S.draftStep=2; S.draftName=S.currentParticipant.name; S.draftTeams=S.currentParticipant.teams;
+      S.draftPlayers=[]; renderDraft(); showS('draft'); return;
+    }
+    renderGame(); showS('game'); return;
+  }
+  // Before June 2: pre-registration (name + teams only)
   startDraft();
 }
 
@@ -594,22 +602,27 @@ async function enterLeague(id){
 function startDraft(){ S.draftStep=0;S.draftName='';S.draftTeams=[];S.draftPlayers=[];S.posFilter='ALL'; renderDraft(); showS('draft'); }
 
 function renderDraft(){
-  const steps=['NAME','TEAMS','PLAYERS','CONFIRM'];
+  const preReg = new Date() < DRAFT_OPEN;
+  const steps = preReg ? ['NAME','TEAMS','CONFIRM'] : ['NAME','TEAMS','PLAYERS','CONFIRM'];
   document.getElementById('prog-strip').innerHTML=steps.map((s,i)=>`<div class="prog-s${S.draftStep===i?' act':S.draftStep>i?' dn':''}">${S.draftStep>i?'✓ ':''}${s}</div>`).join('');
   const body=document.getElementById('draft-body');
   if(S.draftStep===0){
-    body.innerHTML=`<div class="step-card"><div class="step-title">YOUR NAME</div><div class="step-sub">How you'll appear on the leaderboard for ${S.currentLeague.name}</div>
+    body.innerHTML=`<div class="step-card"><div class="step-title">YOUR NAME</div>
+      <div class="step-sub">How you'll appear on the leaderboard for ${S.currentLeague.name}</div>
+      ${preReg?`<div style="background:#F5A62315;border:1px solid #F5A62344;border-radius:8px;padding:10px 14px;margin-bottom:14px;font-size:13px;color:var(--gold)">
+        ⏳ <strong>Pre-Registration Open!</strong> Pick your 3 teams now. Player draft unlocks June 2 when all rosters are confirmed.
+      </div>`:''}
       <input class="field" id="ni" placeholder="Name or nickname..." value="${S.draftName}"/>
       <div class="btn-row"><button class="btn-s" onclick="showS('landing')">← BACK</button><button class="btn-p" onclick="nd0()">NEXT →</button></div></div>`;
     setTimeout(()=>document.getElementById('ni')?.focus(),80);
   } else if(S.draftStep===1){
-    const iso=S.currentLeague.draft_mode==='open';
+    const preReg = new Date() < DRAFT_OPEN;
     body.innerHTML=`<div class="step-card"><div class="step-title">PICK 3 TEAMS</div>
-      <div class="step-sub">Select 3 national teams${!iso?' · Dimmed = already taken':''}</div>
+      <div class="step-sub">Select 3 national teams · Teams are open to all managers</div>
       <div class="counter"><span>${S.draftTeams.length}</span>/3 selected</div>
       <div class="team-grid">${ALL_TEAMS.map(t=>{
         const sel=S.draftTeams.includes(t.id);
-        const na=(!iso&&S.takenTeams.includes(t.id)&&!sel)||(S.draftTeams.length>=3&&!sel);
+        const na=(S.draftTeams.length>=3&&!sel);
         return `<div class="t-tile${sel?' sel':''}${na?' na':''}" style="${sel?`border-color:${t.color};background:${t.color}18`:''}" onclick="togT('${t.id}')">
           ${sel?'<div class="t-ck">✓</div>':''}
           <div class="t-flag">${t.flag}</div>
@@ -617,7 +630,7 @@ function renderDraft(){
           <div class="t-grp">GRP ${t.group}</div>
         </div>`;}).join('')}</div>
       <div class="btn-row"><button class="btn-s" onclick="S.draftStep=0;renderDraft()">← BACK</button>
-        <button class="btn-p" ${S.draftTeams.length<3?'disabled':''} onclick="nd1()">NEXT →</button></div></div>`;
+        <button class="btn-p" ${S.draftTeams.length<3?'disabled':''} onclick="${preReg?'S.draftStep=3;renderDraft()':'nd1()'}">NEXT →</button></div></div>`;
   } else if(S.draftStep===2){
     const iso=S.currentLeague.draft_mode==='open',hyb=S.currentLeague.draft_mode==='hybrid';
     const excl=!iso&&!hyb;
@@ -639,10 +652,14 @@ function renderDraft(){
       <div class="btn-row"><button class="btn-s" onclick="S.draftStep=1;renderDraft()">← BACK</button>
         <button class="btn-p" ${S.draftPlayers.length<11?'disabled':''} onclick="S.draftStep=3;renderDraft()">NEXT →</button></div></div>`;
   } else if(S.draftStep===3){
+    const preReg = new Date() < DRAFT_OPEN;
     const myT=ALL_TEAMS.filter(t=>S.draftTeams.includes(t.id));
     const myP=getDisplayPlayers().filter(p=>S.draftPlayers.includes(p.id));
-    body.innerHTML=`<div class="step-card"><div class="step-title">CONFIRM SQUAD</div>
-      <div class="step-sub">Review picks for <strong>${S.currentLeague.name}</strong></div>
+    body.innerHTML=`<div class="step-card"><div class="step-title">CONFIRM ${preReg?'REGISTRATION':'SQUAD'}</div>
+      <div class="step-sub">${preReg?'Lock in your teams for <strong>'+S.currentLeague.name+'</strong>. Return June 2 to pick your 11 players.':'Review picks for <strong>'+S.currentLeague.name+'</strong>'}</div>
+      ${preReg?`<div style="background:#06D6A015;border:1px solid #06D6A044;border-radius:8px;padding:10px 14px;margin-bottom:14px;font-size:13px;color:var(--green)">
+        ✓ Teams are confirmed. Player picks open <strong>June 2, 2026.</strong>
+      </div>`:''}
       <div style="margin-bottom:14px">
         <div class="sec-head">YOUR TEAMS</div>
         ${myT.map(t=>`<div style="display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid var(--border)">
@@ -650,7 +667,7 @@ function renderDraft(){
           <span style="font-family:var(--font-display);font-size:15px">${t.name}</span>
           <span style="font-size:10px;color:var(--muted);margin-left:auto">GRP ${t.group}</span></div>`).join('')}
       </div>
-      <div style="margin-bottom:16px">
+      ${!preReg && myP.length > 0 ? `<div style="margin-bottom:16px">
         <div class="sec-head">YOUR PLAYERS</div>
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:5px">
           ${myP.map(p=>`<div style="background:var(--bg3);border:1px solid var(--border);border-radius:6px;padding:7px 9px">
@@ -658,14 +675,20 @@ function renderDraft(){
             <div style="font-size:10px;color:${POS_C[p.pos]||'var(--muted)'};font-family:var(--font-display)">${p.pos}</div>
           </div>`).join('')}
         </div>
-      </div>
-      <div class="btn-row"><button class="btn-s" onclick="S.draftStep=2;renderDraft()">← BACK</button>
-        <button class="btn-p" onclick="submitDraft()" id="sub-btn">JOIN LEAGUE ⚡</button></div>
+      </div>` : ''}
+      <div class="btn-row"><button class="btn-s" onclick="S.draftStep=1;renderDraft()">← BACK</button>
+        <button class="btn-p" onclick="submitDraft()" id="sub-btn">${preReg?'REGISTER NOW ⚡':'JOIN LEAGUE ⚡'}</button></div>
       <div id="sub-alert"></div></div>`;
   }
 }
 
-async function nd0(){ const v=document.getElementById('ni')?.value.trim(); if(!v){alert('Enter your name.');return;} S.draftName=v; S.draftStep=1; if(S.currentLeague.draft_mode!=='open') await fetchTaken(); renderDraft(); }
+function startPlayerDraft(){
+  S.draftStep=2; S.draftName=S.currentParticipant.name;
+  S.draftTeams=S.currentParticipant.teams; S.draftPlayers=[];
+  renderDraft(); showS('draft');
+}
+
+async function nd0(){ const v=document.getElementById('ni')?.value.trim(); if(!v){alert('Enter your name.');return;} S.draftName=v; S.draftStep=1; renderDraft(); }
 async function nd1(){ S.draftStep=2; if(S.currentLeague.draft_mode==='snake') await fetchTaken(); renderDraft(); }
 async function fetchTaken(){ const{data}=await db.from('participants').select('teams,players').eq('league_id',S.currentLeague.id); if(data){S.takenTeams=data.flatMap(p=>p.teams||[]);S.takenPlayers=data.flatMap(p=>p.players||[]);} }
 function togT(id){ const sel=S.draftTeams.includes(id);const iso=S.currentLeague.draft_mode==='open';if(!iso&&S.takenTeams.includes(id)&&!sel)return;if(S.draftTeams.length>=3&&!sel)return;sel?S.draftTeams=S.draftTeams.filter(t=>t!==id):S.draftTeams.push(id);renderDraft(); }
@@ -674,8 +697,26 @@ function setPF(pos){ S.posFilter=pos; renderDraft(); }
 
 async function submitDraft(){
   const btn=document.getElementById('sub-btn'); btn.disabled=true; btn.textContent='Saving...';
-  const{data,error}=await db.from('participants').insert({league_id:S.currentLeague.id,name:S.draftName,teams:S.draftTeams,players:S.draftPlayers}).select().single();
-  if(error){ document.getElementById('sub-alert').innerHTML=`<div class="alert a-err">${error.message}</div>`;btn.disabled=false;btn.textContent='JOIN LEAGUE ⚡';return; }
+  const preReg = new Date() < DRAFT_OPEN;
+  const isCompletingPlayers = S.currentParticipant && S.currentParticipant.players.length === 0 && !preReg;
+
+  if(isCompletingPlayers){
+    // Updating existing record with player picks
+    const{data,error}=await db.from('participants').update({players:S.draftPlayers}).eq('id',S.currentParticipant.id).select().single();
+    if(error){ document.getElementById('sub-alert').innerHTML=`<div class="alert a-err">${error.message}</div>`;btn.disabled=false;btn.textContent='COMPLETE DRAFT ⚡';return; }
+    S.currentParticipant=data;
+    localStorage.setItem('p_'+S.currentLeague.id,JSON.stringify(data));
+    await loadParts(); renderGame(); showS('game'); return;
+  }
+
+  // New registration
+  const{data,error}=await db.from('participants').insert({
+    league_id:S.currentLeague.id,
+    name:S.draftName,
+    teams:S.draftTeams,
+    players: preReg ? [] : S.draftPlayers,
+  }).select().single();
+  if(error){ document.getElementById('sub-alert').innerHTML=`<div class="alert a-err">${error.message}</div>`;btn.disabled=false;btn.textContent=preReg?'REGISTER NOW ⚡':'JOIN LEAGUE ⚡';return; }
   S.currentParticipant=data;
   localStorage.setItem('p_'+S.currentLeague.id,JSON.stringify(data));
   await loadParts(); renderGame(); showS('game');
@@ -698,18 +739,22 @@ function renderLB(){
     `<div class="sec-head">${S.currentLeague.name.toUpperCase()} · ${S.participants.length} MANAGERS</div>`+
     S.participants.map((p,i)=>{
       const isme=me&&p.id===me.id;
+      const pending=p.players.length===0;
       const med=i===0?'🥇':i===1?'🥈':i===2?'🥉':`${i+1}`;
       const flags=(p.teams||[]).map(id=>ALL_TEAMS.find(t=>t.id===id)?.flag||'').join(' ');
       const tp=(p.teams||[]).reduce((s,id)=>s+teamPts(id),0);
       const pp=(p.players||[]).reduce((s,id)=>s+(pPts(id)||0),0);
       return `<div class="lb-row${isme?' me':''}">
-        <div class="lb-rank">${med}</div>
+        <div class="lb-rank">${pending?'⏳':med}</div>
         <div class="lb-info">
           <div class="lb-name${isme?' me':''}">${p.name}${isme?' <span style="font-size:10px;color:var(--muted)">(YOU)</span>':''}</div>
           <div class="lb-flags">${flags}</div>
-          <div class="lb-bk">${tp} team · ${pp} player</div>
+          <div class="lb-bk">${pending?'<span style="color:var(--gold);font-size:10px">⏳ Player draft pending June 2</span>':`${tp} team · ${pp} player`}</div>
         </div>
-        <div class="lb-s"><div class="lb-pts">${p._sc}</div><div class="lb-pl">PTS</div></div>
+        <div class="lb-s">
+          <div class="lb-pts">${pending?'—':p._sc}</div>
+          <div class="lb-pl">${pending?'PENDING':'PTS'}</div>
+        </div>
       </div>`;
     }).join('')+
     `<div style="margin-top:14px"><button class="btn-s" onclick="showS('landing')">← Change League</button></div>`;
@@ -722,11 +767,18 @@ function renderRoster(){
   const myT=ALL_TEAMS.filter(t=>(p.teams||[]).includes(t.id));
   const allP=getDisplayPlayers();
   const myP=(p.players||[]).map(id=>allP.find(pl=>pl.id===id)).filter(Boolean);
+  const pending=p.players.length===0;
   el.innerHTML=`<div class="sec-head">MY TEAMS</div>
     ${myT.map(t=>{const r=S.teamResults[t.id]||{w:0,d:0,l:0};return`<div class="r-team" style="border-color:${t.color}44">
       <div class="r-flag">${t.flag}</div>
       <div class="r-info"><div class="r-name">${t.name}</div><div class="r-rec">${r.w}W ${r.d}D ${r.l}L · Group ${t.group}</div></div>
       <div class="r-pts">${teamPts(t.id)} pts</div></div>`;}).join('')}
+    ${pending ? `
+    <div style="background:#F5A62315;border:1px solid #F5A62344;border-radius:10px;padding:16px;margin-top:16px;text-align:center">
+      <div style="font-family:var(--font-display);font-size:18px;color:var(--gold);margin-bottom:6px">⏳ PLAYER DRAFT PENDING</div>
+      <div style="font-size:13px;color:var(--muted);margin-bottom:14px;line-height:1.5">Your 3 teams are locked in! Return on <strong style="color:var(--gold2)">June 2, 2026</strong> to pick your 11 players once all official rosters are confirmed.</div>
+      ${new Date()>=DRAFT_OPEN?`<button class="btn-p" onclick="startPlayerDraft()">PICK YOUR PLAYERS NOW →</button>`:''}
+    </div>` : `
     <div class="sec-head" style="margin-top:18px">MY PLAYERS</div>
     <div class="r-pgrid">${myP.map(pl=>`<div class="r-pc">
       <div class="r-pc-top"><span class="r-pc-name">${pl.name}</span><span class="r-pc-pts">${pl.pts}</span></div>
@@ -734,7 +786,8 @@ function renderRoster(){
         <div style="width:6px;height:6px;border-radius:50%;background:${POS_C[pl.pos]||'#888'}"></div>
         <span style="font-size:9px;color:${POS_C[pl.pos]||'var(--muted)'};font-family:var(--font-display)">${pl.pos}</span>
       </div></div>`).join('')}</div>
-    <div class="total-row"><span class="total-lbl">TOTAL SCORE</span><span class="total-pts">${calcScore(p)} pts</span></div>`;
+    <div class="total-row"><span class="total-lbl">TOTAL SCORE</span><span class="total-pts">${calcScore(p)} pts</span></div>`}
+  `;
 }
 
 function renderMatches(){
