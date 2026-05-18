@@ -386,7 +386,7 @@ const POS_C = {GK:'#F5A623',DEF:'#118AB2',MID:'#06D6A0',FWD:'#EF476F'};
 const S = {
   leagues:[], currentLeague:null, currentParticipant:null, participants:[],
   players:[], playerPts:{}, teamResults:{}, matches:[],
-  draftStep:0, draftName:'', draftTeams:[], draftPlayers:[],
+  draftStep:0, draftName:'', draftTeamName:'', draftTeams:[], draftPlayers:[],
   posFilter:'ALL', takenTeams:[], takenPlayers:[],
   apiStatus:'pending',
 };
@@ -650,14 +650,14 @@ async function findMyTeam(lid){
   const input = document.getElementById('find-name-input');
   const resultEl = document.getElementById('find-result');
   const name = input?.value.trim();
-  if(!name){ resultEl.innerHTML='<div class="alert a-err">Please enter your name.</div>'; return; }
+  if(!name){ resultEl.innerHTML='<div class="alert a-err">Please enter your name or team name.</div>'; return; }
   resultEl.innerHTML='<div style="color:var(--muted);font-size:13px">Searching...</div>';
-  const{data,error}=await db.from('participants').select('*').eq('league_id',lid).ilike('name',`%${name}%`);
+  // Search by full name or team name
+  const{data,error}=await db.from('participants').select('*').eq('league_id',lid).or(`name.ilike.%${name}%,team_name.ilike.%${name}%`);
   if(error||!data||data.length===0){
-    resultEl.innerHTML='<div class="alert a-err">No match found. Try a different spelling or register as a new manager.</div>'; return;
+    resultEl.innerHTML='<div class="alert a-err">No match found. Try your full name, team name, or register as a new manager.</div>'; return;
   }
   if(data.length===1){
-    // Found exact match — load their team
     const l=S.leagues.find(x=>x.id===lid);
     S.currentLeague=l;
     S.currentParticipant=data[0];
@@ -665,10 +665,9 @@ async function findMyTeam(lid){
     document.getElementById('league-choice-overlay').remove();
     await loadParts(); renderGame(); showS('game'); return;
   }
-  // Multiple matches — show list to pick from
   resultEl.innerHTML=`<div style="font-size:12px;color:var(--muted);margin-bottom:8px">Multiple matches — tap yours:</div>`+
     data.map(p=>`<button onclick="selectFoundTeam('${lid}','${p.id}')" style="width:100%;background:var(--bg3);border:1px solid var(--border);border-radius:8px;padding:10px 12px;text-align:left;cursor:pointer;margin-bottom:6px;color:var(--text);font-family:var(--font-display);font-size:15px">
-      ${p.name} · ${(p.teams||[]).map(tid=>ALL_TEAMS.find(t=>t.id===tid)?.flag||'').join(' ')}
+      ${p.team_name||p.name} · ${(p.name||'').split(' ')[0]} ${(p.teams||[]).map(tid=>ALL_TEAMS.find(t=>t.id===tid)?.flag||'').join(' ')}
     </button>`).join('');
 }
 
@@ -695,7 +694,7 @@ async function viewLeagueOnly(id){
 }
 
 // ── DRAFT ────────────────────────────────────────────────────────
-function startDraft(){ S.draftStep=0;S.draftName='';S.draftTeams=[];S.draftPlayers=[];S.posFilter='ALL'; renderDraft(); showS('draft'); }
+function startDraft(){ S.draftStep=0;S.draftName='';S.draftTeamName='';S.draftTeams=[];S.draftPlayers=[];S.posFilter='ALL'; renderDraft(); showS('draft'); }
 
 function renderDraft(){
   const preReg = new Date() < DRAFT_OPEN;
@@ -703,14 +702,15 @@ function renderDraft(){
   document.getElementById('prog-strip').innerHTML=steps.map((s,i)=>`<div class="prog-s${S.draftStep===i?' act':S.draftStep>i?' dn':''}">${S.draftStep>i?'✓ ':''}${s}</div>`).join('');
   const body=document.getElementById('draft-body');
   if(S.draftStep===0){
-    body.innerHTML=`<div class="step-card"><div class="step-title">YOUR NAME</div>
-      <div class="step-sub">How you'll appear on the leaderboard for ${S.currentLeague.name}</div>
+    body.innerHTML=`<div class="step-card"><div class="step-title">REGISTER</div>
+      <div class="step-sub">Enter your details for ${S.currentLeague.name}</div>
       ${preReg?`<div style="background:#F5A62315;border:1px solid #F5A62344;border-radius:8px;padding:10px 14px;margin-bottom:14px;font-size:13px;color:var(--gold)">
         ⏳ <strong>Pre-Registration Open!</strong> Pick your 3 teams now. Player draft unlocks June 2 when all rosters are confirmed.
       </div>`:''}
-      <input class="field" id="ni" placeholder="Name or nickname..." value="${S.draftName}"/>
+      <input class="field" id="ni-full" placeholder="Full name (e.g. Jonathan Drake)" value="${S.draftName}"/>
+      <input class="field" id="ni-team" placeholder="Team name (e.g. The Messi Mafia)" value="${S.draftTeamName}"/>
       <div class="btn-row"><button class="btn-s" onclick="showS('landing')">← BACK</button><button class="btn-p" onclick="nd0()">NEXT →</button></div></div>`;
-    setTimeout(()=>document.getElementById('ni')?.focus(),80);
+    setTimeout(()=>document.getElementById('ni-full')?.focus(),80);
   } else if(S.draftStep===1){
     const preReg = new Date() < DRAFT_OPEN;
     body.innerHTML=`<div class="step-card"><div class="step-title">PICK 3 TEAMS</div>
@@ -757,6 +757,15 @@ function renderDraft(){
         ✓ Teams are confirmed. Player picks open <strong>June 2, 2026.</strong>
       </div>`:''}
       <div style="margin-bottom:14px">
+        <div class="sec-head">YOUR DETAILS</div>
+        <div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid var(--border);font-size:13px">
+          <span style="color:var(--muted)">Full Name</span><span>${S.draftName}</span>
+        </div>
+        <div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid var(--border);font-size:13px">
+          <span style="color:var(--muted)">Team Name</span><span style="color:var(--gold);font-family:var(--font-display);font-size:15px">${S.draftTeamName}</span>
+        </div>
+      </div>
+      <div style="margin-bottom:14px">
         <div class="sec-head">YOUR TEAMS</div>
         ${myT.map(t=>`<div style="display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid var(--border)">
           <span style="font-size:18px">${t.flag}</span>
@@ -780,11 +789,19 @@ function renderDraft(){
 
 function startPlayerDraft(){
   S.draftStep=2; S.draftName=S.currentParticipant.name;
+  S.draftTeamName=S.currentParticipant.team_name||'';
   S.draftTeams=S.currentParticipant.teams; S.draftPlayers=[];
   renderDraft(); showS('draft');
 }
 
-async function nd0(){ const v=document.getElementById('ni')?.value.trim(); if(!v){alert('Enter your name.');return;} S.draftName=v; S.draftStep=1; renderDraft(); }
+async function nd0(){
+  const fullName=document.getElementById('ni-full')?.value.trim();
+  const teamName=document.getElementById('ni-team')?.value.trim();
+  if(!fullName){ alert('Please enter your full name.'); return; }
+  if(!teamName){ alert('Please enter a team name.'); return; }
+  S.draftName=fullName; S.draftTeamName=teamName;
+  S.draftStep=1; renderDraft();
+}
 async function nd1(){ S.draftStep=2; if(S.currentLeague.draft_mode==='snake') await fetchTaken(); renderDraft(); }
 async function fetchTaken(){ const{data}=await db.from('participants').select('teams,players').eq('league_id',S.currentLeague.id); if(data){S.takenTeams=data.flatMap(p=>p.teams||[]);S.takenPlayers=data.flatMap(p=>p.players||[]);} }
 function togT(id){ const sel=S.draftTeams.includes(id);const iso=S.currentLeague.draft_mode==='open';if(!iso&&S.takenTeams.includes(id)&&!sel)return;if(S.draftTeams.length>=3&&!sel)return;sel?S.draftTeams=S.draftTeams.filter(t=>t!==id):S.draftTeams.push(id);renderDraft(); }
@@ -797,7 +814,6 @@ async function submitDraft(){
   const isCompletingPlayers = S.currentParticipant && S.currentParticipant.players.length === 0 && !preReg;
 
   if(isCompletingPlayers){
-    // Updating existing record with player picks
     const{data,error}=await db.from('participants').update({players:S.draftPlayers}).eq('id',S.currentParticipant.id).select().single();
     if(error){ document.getElementById('sub-alert').innerHTML=`<div class="alert a-err">${error.message}</div>`;btn.disabled=false;btn.textContent='COMPLETE DRAFT ⚡';return; }
     S.currentParticipant=data;
@@ -805,10 +821,10 @@ async function submitDraft(){
     await loadParts(); renderGame(); showS('game'); return;
   }
 
-  // New registration
   const{data,error}=await db.from('participants').insert({
     league_id:S.currentLeague.id,
     name:S.draftName,
+    team_name:S.draftTeamName,
     teams:S.draftTeams,
     players: preReg ? [] : S.draftPlayers,
   }).select().single();
@@ -835,15 +851,18 @@ function renderLB(){
     `<div class="sec-head">${S.currentLeague.name.toUpperCase()} · ${S.participants.length} MANAGERS</div>`+
     S.participants.map((p,i)=>{
       const isme=me&&p.id===me.id;
-      const pending=p.players.length===0;
+      const pending=(p.players||[]).length===0;
       const med=i===0?'🥇':i===1?'🥈':i===2?'🥉':`${i+1}`;
       const flags=(p.teams||[]).map(id=>ALL_TEAMS.find(t=>t.id===id)?.flag||'').join(' ');
       const tp=(p.teams||[]).reduce((s,id)=>s+teamPts(id),0);
       const pp=(p.players||[]).reduce((s,id)=>s+(pPts(id)||0),0);
+      const firstName = (p.name||'').split(' ')[0];
+      const teamName = p.team_name || p.name;
+      const displayName = `${teamName} · ${firstName}`;
       return `<div class="lb-row${isme?' me':''}">
         <div class="lb-rank">${pending?'⏳':med}</div>
         <div class="lb-info">
-          <div class="lb-name${isme?' me':''}">${p.name}${isme?' <span style="font-size:10px;color:var(--muted)">(YOU)</span>':''}</div>
+          <div class="lb-name${isme?' me':''}">${displayName}${isme?' <span style="font-size:10px;color:var(--muted)">(YOU)</span>':''}</div>
           <div class="lb-flags">${flags}</div>
           <div class="lb-bk">${pending?'<span style="color:var(--gold);font-size:10px">⏳ Player draft pending June 2</span>':`${tp} team · ${pp} player`}</div>
         </div>
@@ -983,12 +1002,41 @@ async function renderComm(){
           <div class="invite-box">${url}</div>
           <button class="copy-btn" onclick="copyL('${url}',this)">📋 COPY LINK</button>
         </div>
+        <div style="margin-top:14px">
+          <div style="font-size:11px;color:var(--muted);letter-spacing:2px;font-family:var(--font-display);margin-bottom:8px">MANAGE PARTICIPANTS</div>
+          <div id="parts-${l.id}"><div style="color:var(--muted);font-size:12px">Loading...</div></div>
+        </div>
       </div>`;
     }).join('')}`;
   for(const l of S.leagues){
-    const{count}=await db.from('participants').select('*',{count:'exact',head:true}).eq('league_id',l.id);
+    const{data,count}=await db.from('participants').select('*',{count:'exact'}).eq('league_id',l.id);
     const cel=document.getElementById('ct-'+l.id); if(cel) cel.textContent=count||0;
+    const pel=document.getElementById('parts-'+l.id);
+    if(pel){
+      if(!data||data.length===0){
+        pel.innerHTML='<div style="color:var(--muted);font-size:12px">No participants yet.</div>';
+      } else {
+        pel.innerHTML=data.map(p=>`
+          <div style="display:flex;align-items:center;justify-content:space-between;padding:7px 0;border-bottom:1px solid var(--border)">
+            <div>
+              <div style="font-family:var(--font-display);font-size:14px;color:var(--text)">${p.team_name||p.name} · ${(p.name||'').split(' ')[0]}</div>
+              <div style="font-size:10px;color:var(--muted);margin-top:1px">${(p.teams||[]).map(tid=>ALL_TEAMS.find(t=>t.id===tid)?.flag||'').join(' ')} · ${p.players?.length||0} players</div>
+            </div>
+            <button onclick="removeParticipant('${p.id}','${l.id}',this)" style="background:#EF476F18;border:1px solid #EF476F44;color:var(--red);font-size:11px;padding:4px 10px;border-radius:5px;cursor:pointer;font-family:var(--font-display);letter-spacing:1px">REMOVE</button>
+          </div>`).join('');
+      }
+    }
   }
+}
+
+async function removeParticipant(pid, lid, btn){
+  if(!confirm('Remove this participant? This cannot be undone.')) return;
+  btn.textContent='...'; btn.disabled=true;
+  const{error}=await db.from('participants').delete().eq('id',pid);
+  if(error){ alert('Error: '+error.message); btn.textContent='REMOVE'; btn.disabled=false; return; }
+  // Remove from localStorage if it's the current user
+  localStorage.removeItem('p_'+lid);
+  renderComm();
 }
 
 async function createLeague(){
