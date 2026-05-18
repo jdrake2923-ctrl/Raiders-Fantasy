@@ -582,7 +582,10 @@ function goGroups(){
 async function enterLeague(id){
   const l=S.leagues.find(x=>x.id===id); if(!l) return;
   S.currentLeague=l;
-  if(!l.draft_open){ alert('This league\'s draft is closed by the commissioner.'); return; }
+  if(!l.draft_open){
+    // Still allow viewing leaderboard even if draft closed
+    await loadParts(); renderGame(); showS('game'); return;
+  }
   const saved=localStorage.getItem('p_'+l.id);
   if(saved){
     S.currentParticipant=JSON.parse(saved);
@@ -594,8 +597,101 @@ async function enterLeague(id){
     }
     renderGame(); showS('game'); return;
   }
-  // Before June 2: pre-registration (name + teams only)
-  startDraft();
+  // Not registered — show choice: register or just view
+  showLeagueChoice(l);
+}
+
+function showLeagueChoice(l){
+  const existing = document.getElementById('league-choice-overlay');
+  if(existing) existing.remove();
+  const div = document.createElement('div');
+  div.id = 'league-choice-overlay';
+  div.style.cssText = 'position:fixed;inset:0;background:#000C;z-index:400;display:flex;align-items:center;justify-content:center;padding:20px';
+  div.innerHTML = `<div style="background:var(--bg2);border:1px solid var(--border);border-radius:14px;padding:24px;width:100%;max-width:380px">
+    <div style="font-family:var(--font-display);font-size:24px;font-weight:700;color:var(--text);margin-bottom:4px">${l.name}</div>
+    <div style="font-size:13px;color:var(--muted);margin-bottom:20px">${l.draft_mode.toUpperCase()} DRAFT · Max ${l.max_participants} managers</div>
+    <button class="btn-p" style="width:100%;margin-bottom:10px" onclick="document.getElementById('league-choice-overlay').remove();startDraft()">
+      ⚡ REGISTER & PICK TEAMS
+    </button>
+    <button class="btn-s" style="width:100%;margin-bottom:10px" onclick="showFindMyTeam('${l.id}')">
+      🔍 FIND MY TEAM
+    </button>
+    <button class="btn-s" style="width:100%" onclick="viewLeagueOnly('${l.id}')">
+      👀 VIEW LEADERBOARD ONLY
+    </button>
+    <div style="margin-top:14px;text-align:center">
+      <button class="txt-link" onclick="document.getElementById('league-choice-overlay').remove()">← BACK</button>
+    </div>
+  </div>`;
+  document.body.appendChild(div);
+}
+
+function showFindMyTeam(lid){
+  const existing = document.getElementById('league-choice-overlay');
+  if(existing) existing.remove();
+  const div = document.createElement('div');
+  div.id = 'league-choice-overlay';
+  div.style.cssText = 'position:fixed;inset:0;background:#000C;z-index:400;display:flex;align-items:center;justify-content:center;padding:20px';
+  div.innerHTML = `<div style="background:var(--bg2);border:1px solid var(--border);border-radius:14px;padding:24px;width:100%;max-width:380px">
+    <div style="font-family:var(--font-display);font-size:22px;font-weight:700;color:var(--text);margin-bottom:4px">🔍 FIND MY TEAM</div>
+    <div style="font-size:13px;color:var(--muted);margin-bottom:16px">Enter the name you registered with</div>
+    <input class="field" id="find-name-input" placeholder="Your name or nickname..." style="margin-bottom:10px"/>
+    <button class="btn-p" style="width:100%;margin-bottom:10px" onclick="findMyTeam('${lid}')">FIND MY TEAM</button>
+    <div id="find-result" style="margin-bottom:10px"></div>
+    <div style="text-align:center">
+      <button class="txt-link" onclick="document.getElementById('league-choice-overlay').remove();showLeagueChoice(S.leagues.find(x=>x.id==='${lid}'))">← BACK</button>
+    </div>
+  </div>`;
+  document.body.appendChild(div);
+  setTimeout(()=>document.getElementById('find-name-input')?.focus(),80);
+}
+
+async function findMyTeam(lid){
+  const input = document.getElementById('find-name-input');
+  const resultEl = document.getElementById('find-result');
+  const name = input?.value.trim();
+  if(!name){ resultEl.innerHTML='<div class="alert a-err">Please enter your name.</div>'; return; }
+  resultEl.innerHTML='<div style="color:var(--muted);font-size:13px">Searching...</div>';
+  const{data,error}=await db.from('participants').select('*').eq('league_id',lid).ilike('name',`%${name}%`);
+  if(error||!data||data.length===0){
+    resultEl.innerHTML='<div class="alert a-err">No match found. Try a different spelling or register as a new manager.</div>'; return;
+  }
+  if(data.length===1){
+    // Found exact match — load their team
+    const l=S.leagues.find(x=>x.id===lid);
+    S.currentLeague=l;
+    S.currentParticipant=data[0];
+    localStorage.setItem('p_'+lid,JSON.stringify(data[0]));
+    document.getElementById('league-choice-overlay').remove();
+    await loadParts(); renderGame(); showS('game'); return;
+  }
+  // Multiple matches — show list to pick from
+  resultEl.innerHTML=`<div style="font-size:12px;color:var(--muted);margin-bottom:8px">Multiple matches — tap yours:</div>`+
+    data.map(p=>`<button onclick="selectFoundTeam('${lid}','${p.id}')" style="width:100%;background:var(--bg3);border:1px solid var(--border);border-radius:8px;padding:10px 12px;text-align:left;cursor:pointer;margin-bottom:6px;color:var(--text);font-family:var(--font-display);font-size:15px">
+      ${p.name} · ${(p.teams||[]).map(tid=>ALL_TEAMS.find(t=>t.id===tid)?.flag||'').join(' ')}
+    </button>`).join('');
+}
+
+async function selectFoundTeam(lid,pid){
+  const{data}=await db.from('participants').select('*').eq('id',pid).single();
+  if(!data) return;
+  const l=S.leagues.find(x=>x.id===lid);
+  S.currentLeague=l;
+  S.currentParticipant=data;
+  localStorage.setItem('p_'+lid,JSON.stringify(data));
+  document.getElementById('league-choice-overlay').remove();
+  await loadParts(); renderGame(); showS('game');
+}
+
+async function viewLeagueOnly(id){
+  const overlay = document.getElementById('league-choice-overlay');
+  if(overlay) overlay.remove();
+  const l=S.leagues.find(x=>x.id===id); if(!l) return;
+  S.currentLeague=l;
+  S.currentParticipant=null;
+  await loadParts();
+  renderGame();
+  showS('game');
 }
 
 // ── DRAFT ────────────────────────────────────────────────────────
