@@ -1134,12 +1134,15 @@ async function renderComm(){
         pel.innerHTML='<div style="color:var(--muted);font-size:12px">No participants yet.</div>';
       }else{
         pel.innerHTML=data.map(p=>`
-          <div style="display:flex;align-items:center;justify-content:space-between;padding:7px 0;border-bottom:1px solid var(--border)">
-            <div>
+          <div style="display:flex;align-items:center;justify-content:space-between;padding:7px 0;border-bottom:1px solid var(--border);gap:8px">
+            <div style="flex:1;min-width:0">
               <div style="font-family:var(--fd);font-size:14px;color:var(--text)">${p.team_name||p.name} · ${(p.name||'').split(' ')[0]}</div>
               <div style="font-size:10px;color:var(--muted);margin-top:1px">${(p.teams||[]).map(tid=>ALL_TEAMS.find(t=>t.id===tid)?.flag||'').join(' ')} · ${p.players?.length||0} players picked</div>
             </div>
-            <button class="rm-btn" onclick="removeP('${p.id}','${l.id}',this)">REMOVE</button>
+            <div style="display:flex;gap:6px;flex-shrink:0">
+              <button class="copy-btn" style="font-size:10px;padding:4px 8px" onclick="showTransfer('${p.id}','${l.id}','${p.team_name||p.name}')">TRANSFER</button>
+              <button class="rm-btn" onclick="removeP('${p.id}','${l.id}',this)">REMOVE</button>
+            </div>
           </div>`).join('');
       }
     }
@@ -1168,6 +1171,42 @@ async function removeP(pid,lid,btn){
   if(error){alert('Error: '+error.message);btn.textContent='REMOVE';btn.disabled=false;return;}
   localStorage.removeItem('p_'+lid);
   renderComm();
+}
+
+function showTransfer(pid,fromLid,displayName){
+  removeOv();
+  const otherLeagues=S.leagues.filter(l=>l.id!==fromLid);
+  if(!otherLeagues.length){alert('No other leagues to transfer to. Create another league first.');return;}
+  const div=document.createElement('div');
+  div.id='lc-ov';div.className='ov';
+  div.innerHTML=`<div class="ov-card">
+    <div style="font-family:var(--fd);font-size:22px;font-weight:700;color:var(--text);margin-bottom:4px">↔️ TRANSFER PARTICIPANT</div>
+    <div style="font-size:13px;color:var(--muted);margin-bottom:16px">Moving: <strong style="color:var(--gold)">${displayName}</strong></div>
+    <div style="font-size:11px;color:var(--muted);letter-spacing:2px;font-family:var(--fd);margin-bottom:8px">TRANSFER TO LEAGUE</div>
+    <select class="field sel-f" id="transfer-dest" style="width:100%;margin-bottom:16px">
+      ${otherLeagues.map(l=>`<option value="${l.id}">${l.name}</option>`).join('')}
+    </select>
+    <button class="btn-p" style="width:100%;margin-bottom:10px" onclick="transferP('${pid}','${fromLid}')">CONFIRM TRANSFER →</button>
+    <div id="transfer-alert"></div>
+    <div style="text-align:center;margin-top:8px">
+      <button class="txt-link" onclick="removeOv()">← CANCEL</button>
+    </div>
+  </div>`;
+  document.body.appendChild(div);
+}
+
+async function transferP(pid,fromLid){
+  const destId=document.getElementById('transfer-dest')?.value;
+  if(!destId)return;
+  const alertEl=document.getElementById('transfer-alert');
+  const destLeague=S.leagues.find(l=>l.id===destId);
+  const{error}=await db.from('participants').update({league_id:destId}).eq('id',pid);
+  if(error){alertEl.innerHTML=`<div class="alert a-err">${error.message}</div>`;return;}
+  // Clear localStorage for both leagues so participant gets fresh state
+  localStorage.removeItem('p_'+fromLid);
+  localStorage.removeItem('p_'+destId);
+  alertEl.innerHTML=`<div class="alert a-ok">✓ Transferred to ${destLeague?.name||'new league'} successfully!</div>`;
+  setTimeout(()=>{removeOv();renderComm();},1200);
 }
 
 function copyL(url,btn){
