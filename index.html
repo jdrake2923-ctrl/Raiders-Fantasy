@@ -412,14 +412,30 @@ const API_KEY='8305979203083184f47df530e707c2c9';
 const API_BASE='https://v3.football.api-sports.io';
 const WC_LEAGUE=1;
 const WC_SEASON=2026;
-const COMM_PW='Running26$';
+const COMM_PW='jahluvSegovia83$';
 const DRAFT_OPEN=new Date('2026-06-02T12:00:00-04:00');
 
-// ⚠️ SUPABASE NOTE: Run this SQL if team_name column is missing:
+// ⚠️ SUPABASE NOTE: Run these SQL statements if columns are missing:
 // alter table participants add column if not exists team_name text;
+// alter table participants add column if not exists pin_hash text;
+// alter table participants add column if not exists pin_reset boolean default false;
 
 const {createClient}=supabase;
 const db=createClient(SB_URL,SB_KEY);
+
+// ═══════════════════════════════════════════════════════
+// PIN UTILITIES
+// ═══════════════════════════════════════════════════════
+async function hashPin(pin){
+  const enc=new TextEncoder().encode(pin+'wc2026raiders');
+  const buf=await crypto.subtle.digest('SHA-256',enc);
+  return Array.from(new Uint8Array(buf)).map(b=>b.toString(16).padStart(2,'0')).join('');
+}
+
+async function verifyPin(pin,hash){
+  const h=await hashPin(pin);
+  return h===hash;
+}
 
 // ═══════════════════════════════════════════════════════
 // ALL 48 TEAMS — CONFIRMED GROUPS
@@ -447,7 +463,7 @@ const POS_C={GK:'#F5A623',DEF:'#118AB2',MID:'#06D6A0',FWD:'#EF476F'};
 const S={
   leagues:[],currentLeague:null,currentParticipant:null,participants:[],
   players:[],playerPts:{},teamResults:{},matches:[],
-  draftStep:0,draftName:'',draftTeamName:'',draftTeams:[],draftPlayers:[],
+  draftStep:0,draftName:'',draftTeamName:'',draftPinHash:'',draftTeams:[],draftPlayers:[],
   posFilter:'ALL',takenTeams:[],takenPlayers:[],
   apiStatus:'pending',
 };
@@ -677,7 +693,13 @@ async function enterLeague(id){
   }
   const saved=localStorage.getItem('p_'+l.id);
   if(saved){
-    S.currentParticipant=JSON.parse(saved);
+    const p=JSON.parse(saved);
+    // If PIN reset by commissioner, force PIN setup
+    if(p.pin_reset){
+      S.currentLeague=l;
+      showSetNewPin(p);return;
+    }
+    S.currentParticipant=p;
     await loadParts();
     if(S.currentParticipant.players.length===0&&new Date()>=DRAFT_OPEN){
       S.draftStep=2;S.draftName=S.currentParticipant.name;
@@ -734,24 +756,107 @@ async function findTeam(lid){
   const{data,error}=await db.from('participants').select('*').eq('league_id',lid).or(`name.ilike.%${name}%,team_name.ilike.%${name}%`);
   if(error||!data||data.length===0){res.innerHTML='<div class="alert a-err">No match found. Try your full name, team name, or register.</div>';return;}
   if(data.length===1){
-    const l=S.leagues.find(x=>x.id===lid);
-    S.currentLeague=l;S.currentParticipant=data[0];
-    localStorage.setItem('p_'+lid,JSON.stringify(data[0]));
-    removeOv();await loadParts();renderGame();showS('game');return;
+    showPinEntry(lid,data[0],res);return;
   }
   res.innerHTML=`<div style="font-size:12px;color:var(--muted);margin-bottom:8px">Multiple matches — tap yours:</div>`+
-    data.map(p=>`<button onclick="selectFound('${lid}','${p.id}')" style="width:100%;background:var(--bg3);border:1px solid var(--border);border-radius:8px;padding:10px 12px;text-align:left;cursor:pointer;margin-bottom:6px;color:var(--text);font-family:var(--fd);font-size:15px">
+    data.map(p=>`<button onclick="showPinEntryById('${lid}','${p.id}')" style="width:100%;background:var(--bg3);border:1px solid var(--border);border-radius:8px;padding:10px 12px;text-align:left;cursor:pointer;margin-bottom:6px;color:var(--text);font-family:var(--fd);font-size:15px">
       ${p.team_name||p.name} · ${(p.name||'').split(' ')[0]} ${(p.teams||[]).map(tid=>ALL_TEAMS.find(t=>t.id===tid)?.flag||'').join(' ')}
     </button>`).join('');
 }
 
-async function selectFound(lid,pid){
+function showPinEntry(lid,p,containerEl){
+  const needsSetup=!p.pin_hash||p.pin_reset;
+  const html=needsSetup?`
+    <div class="alert a-warn" style="margin-bottom:12px">
+      ${p.pin_reset?'Your PIN was reset by the commissioner.':'First time on this device!'} Please create a new 4-digit PIN to secure your account.
+    </div>
+    <input class="field" type="password" inputmode="numeric" maxlength="4" id="pin-new" placeholder="Choose a 4-digit PIN"/>
+    <input class="field" type="password" inputmode="numeric" maxlength="4" id="pin-new2" placeholder="Confirm PIN"/>
+    <button class="btn-p" style="width:100%" onclick="saveNewPin('${p.id}','${lid}')">SET PIN &amp; CONTINUE →</button>
+  `:`
+    <div style="font-size:13px;color:var(--text);margin-bottom:12px">Enter your PIN for <strong style="color:var(--gold)">${p.team_name||p.name}</strong></div>
+    <input class="field" type="password" inputmode="numeric" maxlength="4" id="pin-entry" placeholder="Your 4-digit PIN" autofocus/>
+    <button class="btn-p" style="width:100%;margin-bottom:8px" onclick="checkPin('${p.id}','${lid}')">UNLOCK →</button>
+    <div style="text-align:center"><button class="txt-link" onclick="showForgotPin('${p.id}','${lid}','${p.team_name||p.name}')">Forgot PIN?</button></div>
+  `;
+  if(containerEl){containerEl.innerHTML=html;}
+  else{
+    removeOv();
+    const div=document.createElement('div');div.id='lc-ov';div.className='ov';
+    div.innerHTML=`<div class="ov-card">
+      <div style="font-family:var(--fd);font-size:22px;font-weight:700;color:var(--text);margin-bottom:16px">🔐 ACCOUNT ACCESS</div>
+      ${html}
+      <div style="text-align:center;margin-top:12px"><button class="txt-link" onclick="removeOv()">← BACK</button></div>
+    </div>`;
+    document.body.appendChild(div);
+  }
+}
+
+async function showPinEntryById(lid,pid){
   const{data}=await db.from('participants').select('*').eq('id',pid).single();
-  if(!data)return;
+  if(data)showPinEntry(lid,data,null);
+}
+
+async function checkPin(pid,lid){
+  const pin=document.getElementById('pin-entry')?.value.trim();
+  if(!pin||pin.length!==4){alert('Please enter your 4-digit PIN.');return;}
+  const{data}=await db.from('participants').select('*').eq('id',pid).single();
+  if(!data){alert('Account not found.');return;}
+  const valid=await verifyPin(pin,data.pin_hash);
+  if(!valid){
+    const el=document.getElementById('pin-entry');
+    if(el){el.value='';el.style.borderColor='var(--red)';el.placeholder='Incorrect PIN — try again';}
+    return;
+  }
   const l=S.leagues.find(x=>x.id===lid);
   S.currentLeague=l;S.currentParticipant=data;
   localStorage.setItem('p_'+lid,JSON.stringify(data));
-  removeOv();await loadParts();renderGame();showS('game');
+  removeOv();await loadParts();
+  if(data.players.length===0&&new Date()>=DRAFT_OPEN){
+    S.draftStep=2;S.draftName=data.name;S.draftTeamName=data.team_name||'';
+    S.draftTeams=data.teams;S.draftPlayers=[];renderDraft();showS('draft');return;
+  }
+  renderGame();showS('game');
+}
+
+async function saveNewPin(pid,lid){
+  const pin=document.getElementById('pin-new')?.value.trim();
+  const pin2=document.getElementById('pin-new2')?.value.trim();
+  if(!pin||pin.length!==4||!/^\d{4}$/.test(pin)){alert('Please enter a 4-digit PIN (numbers only).');return;}
+  if(pin!==pin2){alert('PINs do not match.');return;}
+  const hash=await hashPin(pin);
+  const{data,error}=await db.from('participants').update({pin_hash:hash,pin_reset:false}).eq('id',pid).select().single();
+  if(error){alert('Error saving PIN: '+error.message);return;}
+  const l=S.leagues.find(x=>x.id===lid);
+  S.currentLeague=l;S.currentParticipant=data;
+  localStorage.setItem('p_'+lid,JSON.stringify(data));
+  removeOv();await loadParts();
+  if(data.players.length===0&&new Date()>=DRAFT_OPEN){
+    S.draftStep=2;S.draftName=data.name;S.draftTeamName=data.team_name||'';
+    S.draftTeams=data.teams;S.draftPlayers=[];renderDraft();showS('draft');return;
+  }
+  renderGame();showS('game');
+}
+
+function showForgotPin(pid,lid,displayName){
+  const el=document.querySelector('#lc-ov .ov-card')||document.getElementById('find-res');
+  if(el){el.innerHTML=`<div class="alert a-warn" style="margin-bottom:10px">
+    Contact the commissioner to reset your PIN for <strong>${displayName}</strong>. Once reset, you can create a new one on your next login.
+  </div>
+  <div style="text-align:center"><button class="txt-link" onclick="showPinEntryById('${lid}','${pid}')">← BACK</button></div>`;}
+}
+
+function showSetNewPin(p){
+  removeOv();
+  const div=document.createElement('div');div.id='lc-ov';div.className='ov';
+  div.innerHTML=`<div class="ov-card">
+    <div style="font-family:var(--fd);font-size:22px;font-weight:700;color:var(--text);margin-bottom:4px">🔐 SET NEW PIN</div>
+    <div style="font-size:13px;color:var(--muted);margin-bottom:16px">Your PIN was reset. Please create a new one to access your account.</div>
+    <input class="field" type="password" inputmode="numeric" maxlength="4" id="pin-new" placeholder="Choose a 4-digit PIN"/>
+    <input class="field" type="password" inputmode="numeric" maxlength="4" id="pin-new2" placeholder="Confirm PIN"/>
+    <button class="btn-p" style="width:100%" onclick="saveNewPin('${p.id}','${S.currentLeague.id}')">SET PIN &amp; CONTINUE →</button>
+  </div>`;
+  document.body.appendChild(div);
 }
 
 async function viewOnly(lid){
@@ -788,6 +893,9 @@ function renderDraft(){
       ${preReg?`<div class="alert a-warn">⏳ <strong>Pre-Registration Open!</strong> Pick your 3 teams now. Player draft unlocks June 2 when all rosters are confirmed by FIFA.</div>`:''}
       <input class="field" id="ni-full" placeholder="Full name (e.g. Jonathan Drake)" value="${S.draftName}"/>
       <input class="field" id="ni-team" placeholder="Fantasy team name (e.g. The Messi Mafia)" value="${S.draftTeamName}"/>
+      <input class="field" id="ni-pin" type="password" inputmode="numeric" maxlength="4" placeholder="Choose a 4-digit PIN (to secure your account)" value=""/>
+      <input class="field" id="ni-pin2" type="password" inputmode="numeric" maxlength="4" placeholder="Confirm your 4-digit PIN" value=""/>
+      <div style="font-size:11px;color:var(--muted);margin-bottom:14px;line-height:1.5">Your PIN protects your account when logging in from a new device. Keep it simple — you'll need it on June 2 to complete your player draft.</div>
       <div class="btn-row">
         <button class="btn-s" onclick="showS('landing')">← BACK</button>
         <button class="btn-p" onclick="nd0()">NEXT →</button>
@@ -889,9 +997,15 @@ function renderDraft(){
 async function nd0(){
   const fn=document.getElementById('ni-full')?.value.trim();
   const tn=document.getElementById('ni-team')?.value.trim();
+  const pin=document.getElementById('ni-pin')?.value.trim();
+  const pin2=document.getElementById('ni-pin2')?.value.trim();
   if(!fn){alert('Please enter your full name.');return;}
   if(!tn){alert('Please enter a fantasy team name.');return;}
-  S.draftName=fn;S.draftTeamName=tn;S.draftStep=1;renderDraft();
+  if(!pin||pin.length!==4||!/^\d{4}$/.test(pin)){alert('Please choose a 4-digit PIN (numbers only).');return;}
+  if(pin!==pin2){alert('PINs do not match. Please try again.');return;}
+  S.draftName=fn;S.draftTeamName=tn;
+  S.draftPinHash=await hashPin(pin);
+  S.draftStep=1;renderDraft();
 }
 async function nd1(){S.draftStep=2;if(S.currentLeague.draft_mode==='snake')await fetchTaken();renderDraft();}
 async function fetchTaken(){const{data}=await db.from('participants').select('teams,players').eq('league_id',S.currentLeague.id);if(data){S.takenTeams=data.flatMap(p=>p.teams||[]);S.takenPlayers=data.flatMap(p=>p.players||[]);}}
@@ -918,6 +1032,7 @@ async function submitDraft(){
   }
   const{data,error}=await db.from('participants').insert({
     league_id:S.currentLeague.id,name:S.draftName,team_name:S.draftTeamName,
+    pin_hash:S.draftPinHash,pin_reset:false,
     teams:S.draftTeams,players:preReg?[]:S.draftPlayers,
   }).select().single();
   if(error){document.getElementById('sub-alert').innerHTML=`<div class="alert a-err">${error.message}</div>`;btn.disabled=false;btn.textContent=preReg?'REGISTER NOW ⚡':'JOIN LEAGUE ⚡';return;}
@@ -1137,10 +1252,11 @@ async function renderComm(){
           <div style="display:flex;align-items:center;justify-content:space-between;padding:7px 0;border-bottom:1px solid var(--border);gap:8px">
             <div style="flex:1;min-width:0">
               <div style="font-family:var(--fd);font-size:14px;color:var(--text)">${p.team_name||p.name} · ${(p.name||'').split(' ')[0]}</div>
-              <div style="font-size:10px;color:var(--muted);margin-top:1px">${(p.teams||[]).map(tid=>ALL_TEAMS.find(t=>t.id===tid)?.flag||'').join(' ')} · ${p.players?.length||0} players picked</div>
+              <div style="font-size:10px;color:var(--muted);margin-top:1px">${(p.teams||[]).map(tid=>ALL_TEAMS.find(t=>t.id===tid)?.flag||'').join(' ')} · ${p.players?.length||0} players · ${p.pin_hash?'🔐 PIN set':'⚠️ No PIN'}</div>
             </div>
-            <div style="display:flex;gap:6px;flex-shrink:0">
-              <button class="copy-btn" style="font-size:10px;padding:4px 8px" onclick="showTransfer('${p.id}','${l.id}','${p.team_name||p.name}')">TRANSFER</button>
+            <div style="display:flex;gap:5px;flex-shrink:0;flex-wrap:wrap;justify-content:flex-end">
+              <button class="copy-btn" style="font-size:10px;padding:4px 8px" onclick="showTransfer('${p.id}','${l.id}','${(p.team_name||p.name).replace(/'/g,"\\'")}')">TRANSFER</button>
+              <button class="copy-btn" style="font-size:10px;padding:4px 8px;color:var(--gold);border-color:var(--gold)" onclick="resetPin('${p.id}','${p.team_name||p.name}')">RESET PIN</button>
               <button class="rm-btn" onclick="removeP('${p.id}','${l.id}',this)">REMOVE</button>
             </div>
           </div>`).join('');
@@ -1170,6 +1286,14 @@ async function removeP(pid,lid,btn){
   const{error}=await db.from('participants').delete().eq('id',pid);
   if(error){alert('Error: '+error.message);btn.textContent='REMOVE';btn.disabled=false;return;}
   localStorage.removeItem('p_'+lid);
+  renderComm();
+}
+
+async function resetPin(pid,displayName){
+  if(!confirm(`Reset PIN for ${displayName}? They will be prompted to create a new PIN on their next login.`))return;
+  const{error}=await db.from('participants').update({pin_hash:null,pin_reset:true}).eq('id',pid);
+  if(error){alert('Error resetting PIN: '+error.message);return;}
+  alert(`✓ PIN reset for ${displayName}. They will be prompted to create a new PIN on their next login.`);
   renderComm();
 }
 
