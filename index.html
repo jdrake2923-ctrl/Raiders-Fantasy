@@ -1193,7 +1193,7 @@ async function renderComm(){
         <div style="flex:1">
           <div style="font-size:11px;color:var(--muted);margin-bottom:4px;font-family:var(--fd);letter-spacing:1px">MAX PARTICIPANTS</div>
           <select class="field sel-f" id="nl-max" style="margin-bottom:0;width:100%">
-            ${[10,15,20,25,30,40,50].map(n=>`<option value="${n}" ${n===30?'selected':''}>${n}</option>`).join('')}
+            ${[20,25,30,35,40,45,50,55,60].map(n=>`<option value="${n}" ${n===30?'selected':''}>${n}</option>`).join('')}
           </select>
         </div>
       </div>
@@ -1225,7 +1225,7 @@ async function renderComm(){
         </div>
         <div class="sr"><span class="sr-lbl">Max Participants</span>
           <select class="sel-f" onchange="updL('${l.id}','max_participants',parseInt(this.value))">
-            ${[10,15,20,25,30,40,50].map(n=>`<option value="${n}" ${l.max_participants===n?'selected':''}>${n}</option>`).join('')}
+            ${[15,20,25,30,35,40,45,50,55,60].map(n=>`<option value="${n}" ${l.max_participants===n?'selected':''}>${n}</option>`).join('')}
           </select>
         </div>
         <div style="margin-top:14px">
@@ -1251,12 +1251,13 @@ async function renderComm(){
         pel.innerHTML=data.map(p=>`
           <div style="display:flex;align-items:center;justify-content:space-between;padding:7px 0;border-bottom:1px solid var(--border);gap:8px">
             <div style="flex:1;min-width:0">
-              <div style="font-family:var(--fd);font-size:14px;color:var(--text)">${p.team_name||p.name} · ${(p.name||'').split(' ')[0]}</div>
+              <div style="font-family:var(--fd);font-size:15px;color:var(--text)">${p.name||'—'}</div>
+              <div style="font-size:11px;color:var(--gold);font-family:var(--fd)">${p.team_name||'No team name'}</div>
               <div style="font-size:10px;color:var(--muted);margin-top:1px">${(p.teams||[]).map(tid=>ALL_TEAMS.find(t=>t.id===tid)?.flag||'').join(' ')} · ${p.players?.length||0} players · ${p.pin_hash?'🔐 PIN set':'⚠️ No PIN'}</div>
             </div>
             <div style="display:flex;gap:5px;flex-shrink:0;flex-wrap:wrap;justify-content:flex-end">
               <button class="copy-btn" style="font-size:10px;padding:4px 8px" onclick="showTransfer('${p.id}','${l.id}','${(p.team_name||p.name).replace(/'/g,"\\'")}')">TRANSFER</button>
-              <button class="copy-btn" style="font-size:10px;padding:4px 8px;color:var(--gold);border-color:var(--gold)" onclick="resetPin('${p.id}','${p.team_name||p.name}')">RESET PIN</button>
+              <button class="copy-btn" style="font-size:10px;padding:4px 8px;color:var(--gold);border-color:var(--gold)" onclick="resetPin('${p.id}','${p.name||p.team_name}')">RESET PIN</button>
               <button class="rm-btn" onclick="removeP('${p.id}','${l.id}',this)">REMOVE</button>
             </div>
           </div>`).join('');
@@ -1299,8 +1300,7 @@ async function resetPin(pid,displayName){
 
 function showTransfer(pid,fromLid,displayName){
   removeOv();
-  const otherLeagues=S.leagues.filter(l=>l.id!==fromLid);
-  if(!otherLeagues.length){alert('No other leagues to transfer to. Create another league first.');return;}
+  if(S.leagues.length<=1){alert('No other leagues to transfer to. Create another league first.');return;}
   const div=document.createElement('div');
   div.id='lc-ov';div.className='ov';
   div.innerHTML=`<div class="ov-card">
@@ -1308,7 +1308,9 @@ function showTransfer(pid,fromLid,displayName){
     <div style="font-size:13px;color:var(--muted);margin-bottom:16px">Moving: <strong style="color:var(--gold)">${displayName}</strong></div>
     <div style="font-size:11px;color:var(--muted);letter-spacing:2px;font-family:var(--fd);margin-bottom:8px">TRANSFER TO LEAGUE</div>
     <select class="field sel-f" id="transfer-dest" style="width:100%;margin-bottom:16px">
-      ${otherLeagues.map(l=>`<option value="${l.id}">${l.name}</option>`).join('')}
+      ${S.leagues.map(l=>`<option value="${l.id}" ${l.id===fromLid?'disabled':''}>
+        ${l.name}${l.id===fromLid?' (current)':''}
+      </option>`).join('')}
     </select>
     <button class="btn-p" style="width:100%;margin-bottom:10px" onclick="transferP('${pid}','${fromLid}')">CONFIRM TRANSFER →</button>
     <div id="transfer-alert"></div>
@@ -1317,6 +1319,12 @@ function showTransfer(pid,fromLid,displayName){
     </div>
   </div>`;
   document.body.appendChild(div);
+  // Auto-select first non-current league
+  const sel=document.getElementById('transfer-dest');
+  if(sel){
+    const firstValid=S.leagues.find(l=>l.id!==fromLid);
+    if(firstValid)sel.value=firstValid.id;
+  }
 }
 
 async function transferP(pid,fromLid){
