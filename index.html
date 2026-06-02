@@ -287,7 +287,7 @@ select option{background:var(--bg2)}
         <div class="sc"><span id="mgr-count" class="sc-n">—</span><span class="sc-l">MANAGERS</span></div>
       </div>
       <div class="cd-banner" id="cd-banner">
-        <div class="cd-label">DRAFT OPENS WHEN ALL ROSTERS ARE OFFICIAL</div>
+        <div class="cd-label">TOURNAMENT KICKOFF COUNTDOWN</div>
         <div class="cd-grid">
           <div class="cd-unit"><span class="cd-num" id="cd-d">--</span><span class="cd-lbl">DAYS</span></div>
           <div class="cd-sep">:</div>
@@ -297,7 +297,7 @@ select option{background:var(--bg2)}
           <div class="cd-sep">:</div>
           <div class="cd-unit"><span class="cd-num" id="cd-s">--</span><span class="cd-lbl">SEC</span></div>
         </div>
-        <div class="cd-note"><strong>June 2, 2026</strong> — FIFA officially confirms all 48 rosters.<br>Pick your teams now. Player draft opens June 2. Tournament kicks off <strong>June 11.</strong></div>
+        <div class="cd-note"><strong>June 11, 2026</strong> — Tournament kicks off. Draft is <strong style="color:var(--green)">OPEN NOW</strong> — pick your teams and players!</div>
       </div>
       <div style="font-family:var(--fd);font-size:12px;letter-spacing:2px;color:var(--muted);margin-bottom:10px">SELECT YOUR LEAGUE</div>
       <div class="ll" id="league-list"><div class="loading"><div class="spin"></div> Loading...</div></div>
@@ -356,11 +356,14 @@ select option{background:var(--bg2)}
     </div>
     <div class="m-body">
       <div class="sg">
-        <div class="sg-title">🏟️ TEAM POINTS (per match)</div>
-        <div class="sl"><div class="sl-top"><span class="sl-label">Win</span><span class="s-p">+2 pts</span></div><div class="sl-def">Official match result. Includes wins in extra time.</div><div class="s-src">Source: Official FIFA match result</div></div>
-        <div class="sl"><div class="sl-top"><span class="sl-label">Draw / Tie</span><span class="s-p">+1 pt</span></div><div class="sl-def">90-minute result is level. Does not apply if match goes to extra time then one team wins.</div><div class="s-src">Source: Official FIFA match result</div></div>
+        <div class="sg-title">🏟️ TEAM POINTS</div>
+        <div class="sl"><div class="sl-top"><span class="sl-label">Group stage win</span><span class="s-p">+2 pts</span></div><div class="sl-def">Standard win in the group stage.</div><div class="s-src">Source: Official FIFA match result</div></div>
+        <div class="sl"><div class="sl-top"><span class="sl-label">Group stage draw</span><span class="s-p">+1 pt</span></div><div class="sl-def">90-minute result is level in group play.</div><div class="s-src">Source: Official FIFA match result</div></div>
         <div class="sl"><div class="sl-top"><span class="sl-label">Loss</span><span style="color:var(--muted);font-family:var(--fd)">0</span></div></div>
-        <div class="sl"><div class="sl-top"><span class="sl-label">Possession &gt;50%</span><span class="s-p">+1 pt</span></div><div class="sl-def">Team controls the ball for more than half of the match. Measured as percentage of total play time.</div><div class="s-src">Source: API-Football match statistics / Sofascore</div></div>
+        <div class="sl"><div class="sl-top"><span class="sl-label">Possession &gt;50%</span><span class="s-p">+1 pt</span></div><div class="sl-def">Team controls the ball for more than half of the match.</div><div class="s-src">Source: API-Football match statistics</div></div>
+        <div class="sl"><div class="sl-top"><span class="sl-label">Knockout stage win (R16, QF)</span><span class="s-p">+2 pts</span></div><div class="sl-def">Win in the Round of 32, Round of 16, or Quarter-Final. Includes wins on penalties.</div><div class="s-src">Source: Official FIFA match result</div></div>
+        <div class="sl"><div class="sl-top"><span class="sl-label">Semi-Final win</span><span class="s-p">+4 pts</span></div><div class="sl-def">Win in the Semi-Final. Includes wins on penalties.</div><div class="s-src">Source: Official FIFA match result</div></div>
+        <div class="sl"><div class="sl-top"><span class="sl-label">Win the World Cup</span><span class="s-p">+8 pts</span></div><div class="sl-def">Team wins the FIFA World Cup Final. Biggest bonus in the game.</div><div class="s-src">Source: Official FIFA match result</div></div>
       </div>
       <div class="sg">
         <div class="sg-title">⚽ PLAYER POINTS (per match)</div>
@@ -413,7 +416,7 @@ const API_BASE='https://v3.football.api-sports.io';
 const WC_LEAGUE=1;
 const WC_SEASON=2026;
 const COMM_PW='jahluvSegovia83$';
-const DRAFT_OPEN=new Date('2026-06-02T12:00:00-04:00');
+const DRAFT_OPEN=new Date('2026-05-01T00:00:00-04:00');
 
 // ⚠️ SUPABASE NOTE: Run these SQL statements if columns are missing:
 // alter table participants add column if not exists team_name text;
@@ -511,11 +514,31 @@ function buildTeamResults(){
     const st=m.fixture.status.short;
     if(!['FT','AET','PEN'].includes(st))continue;
     const hn=m.teams.home.name,an=m.teams.away.name;
-    if(!byName[hn])byName[hn]={w:0,d:0,l:0,pb:0};
-    if(!byName[an])byName[an]={w:0,d:0,l:0,pb:0};
-    if(m.teams.home.winner===true){byName[hn].w++;byName[an].l++;}
-    else if(m.teams.away.winner===true){byName[an].w++;byName[hn].l++;}
-    else{byName[hn].d++;byName[an].d++;}
+    if(!byName[hn])byName[hn]={w:0,d:0,l:0,pb:0,ko:0,sf:0,final:0};
+    if(!byName[an])byName[an]={w:0,d:0,l:0,pb:0,ko:0,sf:0,final:0};
+
+    // Determine match round from fixture data
+    const round=(m.league?.round||'').toLowerCase();
+    const isGroupStage=round.includes('group');
+    const isSemiFinal=round.includes('semi');
+    const isFinal=round.includes('final')&&!round.includes('semi')&&!round.includes('third');
+    const isKnockout=!isGroupStage&&!isSemiFinal&&!isFinal;
+
+    if(m.teams.home.winner===true){
+      byName[hn].w++;byName[an].l++;
+      if(isSemiFinal)byName[hn].sf++;
+      else if(isFinal)byName[hn].final++;
+      else if(isKnockout)byName[hn].ko++;
+    } else if(m.teams.away.winner===true){
+      byName[an].w++;byName[hn].l++;
+      if(isSemiFinal)byName[an].sf++;
+      else if(isFinal)byName[an].final++;
+      else if(isKnockout)byName[an].ko++;
+    } else{
+      byName[hn].d++;byName[an].d++;
+    }
+
+    // Possession bonus
     const stats=m.statistics||[];
     const homeStat=stats.find(s=>s.team?.name===hn);
     const awayStat=stats.find(s=>s.team?.name===an);
@@ -527,11 +550,22 @@ function buildTeamResults(){
   const byCode={};
   for(const t of ALL_TEAMS){
     const key=Object.keys(byName).find(n=>n.toLowerCase().replace(/\s/g,'').startsWith(t.name.toLowerCase().replace(/\s/g,'').slice(0,4)));
-    byCode[t.id]=key?byName[key]:{w:0,d:0,l:0,pb:0};
+    byCode[t.id]=key?byName[key]:{w:0,d:0,l:0,pb:0,ko:0,sf:0,final:0};
   }
   S.teamResults=byCode;
 }
-function teamPts(id){const r=S.teamResults[id]||{w:0,d:0,l:0,pb:0};return r.w*2+r.d+(r.pb||0);}
+
+function teamPts(id){
+  const r=S.teamResults[id]||{w:0,d:0,l:0,pb:0,ko:0,sf:0,final:0};
+  return(
+    r.w*2+      // group stage wins
+    r.d*1+      // group stage draws
+    r.pb+       // possession bonus
+    r.ko*2+     // knockout stage wins (R16, QF)
+    r.sf*4+     // semi-final wins
+    r.final*8   // World Cup winners
+  );
+}
 
 function calcPlayerPts(){
   const pts={};
@@ -648,8 +682,10 @@ function showS(id){document.querySelectorAll('.screen').forEach(s=>s.classList.r
 // ═══════════════════════════════════════════════════════
 // COUNTDOWN
 // ═══════════════════════════════════════════════════════
+const TOURNAMENT_START=new Date('2026-06-11T17:00:00-04:00');
+
 function tick(){
-  const diff=DRAFT_OPEN-new Date();
+  const diff=TOURNAMENT_START-new Date();
   if(diff<=0){document.getElementById('cd-banner').style.display='none';return;}
   document.getElementById('cd-d').textContent=String(Math.floor(diff/86400000)).padStart(2,'0');
   document.getElementById('cd-h').textContent=String(Math.floor(diff%86400000/3600000)).padStart(2,'0');
