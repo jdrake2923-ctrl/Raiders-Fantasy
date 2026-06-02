@@ -470,7 +470,7 @@ const S={
   leagues:[],currentLeague:null,currentParticipant:null,participants:[],
   players:[],playerPts:{},teamResults:{},matches:[],
   draftStep:0,draftName:'',draftTeamName:'',draftPinHash:'',draftTeams:[],draftPlayers:[],
-  posFilter:'ALL',playerSearch:'',playerSort:'name',
+  posFilter:'ALL',playerSearch:'',playerSort:'team',
   takenTeams:[],takenPlayers:[],
   apiStatus:'pending',
 };
@@ -1313,7 +1313,7 @@ function removeOv(){const e=document.getElementById('lc-ov');if(e)e.remove();}
 // ═══════════════════════════════════════════════════════
 // DRAFT
 // ═══════════════════════════════════════════════════════
-function startDraft(){S.draftStep=0;S.draftName='';S.draftTeamName='';S.draftPinHash='';S.draftTeams=[];S.draftPlayers=[];S.posFilter='ALL';S.playerSearch='';S.playerSort='name';renderDraft();showS('draft');}
+function startDraft(){S.draftStep=0;S.draftName='';S.draftTeamName='';S.draftPinHash='';S.draftTeams=[];S.draftPlayers=[];S.posFilter='ALL';S.playerSearch='';S.playerSort='team';renderDraft();showS('draft');}
 
 function startPlayerDraft(){
   S.draftStep=2;S.draftName=S.currentParticipant.name;
@@ -1405,8 +1405,8 @@ function renderDraft(){
       <div style="display:flex;gap:6px;margin-bottom:10px;align-items:center;flex-wrap:wrap">
         <div class="pos-bar" style="margin-bottom:0;flex:1">${['ALL','GK','DEF','MID','FWD'].map(pos=>`<button class="pp${S.posFilter===pos?' on':''}" onclick="setPF('${pos}')">${pos}</button>`).join('')}</div>
         <select style="background:var(--bg3);border:1px solid var(--border);color:var(--muted);font-size:11px;padding:4px 8px;border-radius:6px;font-family:var(--fb);outline:none" onchange="S.playerSort=this.value;renderDraft()">
-          <option value="name" ${(S.playerSort||'name')==='name'?'selected':''}>A–Z Name</option>
-          <option value="team" ${S.playerSort==='team'?'selected':''}>By Country</option>
+          <option value="name" ${S.playerSort==='name'?'selected':''}>A–Z Name</option>
+          <option value="team" ${(!S.playerSort||S.playerSort==='team')?'selected':''}>By Country</option>
           <option value="pos" ${S.playerSort==='pos'?'selected':''}>By Position</option>
         </select>
       </div>
