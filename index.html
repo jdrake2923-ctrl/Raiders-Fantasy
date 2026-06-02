@@ -1541,7 +1541,8 @@ function goTab(id,btn){
 function renderLB(){
   const me=S.currentParticipant;
   document.getElementById('tab-lb').innerHTML=
-    `<div class="sec-head">${S.currentLeague.name.toUpperCase()} · ${S.participants.length} MANAGERS</div>`+
+    `<div class="sec-head">${S.currentLeague.name.toUpperCase()} · ${S.participants.length} MANAGERS</div>
+    <div style="font-size:11px;color:var(--muted);margin-bottom:12px">Tap any manager to see their full squad.</div>`+
     S.participants.map((p,i)=>{
       const isme=me&&p.id===me.id;
       const pending=(p.players||[]).length===0;
@@ -1551,17 +1552,64 @@ function renderLB(){
       const pp=(p.players||[]).reduce((s,id)=>s+(pPts(id)||0),0);
       const firstName=(p.name||'').split(' ')[0];
       const displayName=`${p.team_name||p.name} · ${firstName}`;
-      return`<div class="lb-row${isme?' me':''}">
-        <div class="lb-rank">${pending?'⏳':med}</div>
-        <div class="lb-info">
-          <div class="lb-name${isme?' me':''}">${displayName}${isme?' <span style="font-size:10px;color:var(--muted)">(YOU)</span>':''}</div>
-          <div class="lb-flags">${flags}</div>
-          <div class="lb-bk">${pending?'<span style="color:var(--gold);font-size:10px">⏳ Player draft pending June 2</span>':`${tp} team · ${pp} player`}</div>
+      const allP=getDisplayPlayers();
+      const myTeams=ALL_TEAMS.filter(t=>(p.teams||[]).includes(t.id));
+      const myPlayers=(p.players||[]).map(id=>allP.find(pl=>pl.id===id)).filter(Boolean);
+
+      const expandedHtml=pending?
+        `<div style="padding:10px 0 4px;font-size:12px;color:var(--gold)">⏳ Player draft pending</div>`:
+        `<div style="padding:8px 0 4px">
+          <div style="font-size:10px;color:var(--muted);letter-spacing:2px;font-family:var(--fd);margin-bottom:6px">TEAMS</div>
+          <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px">
+            ${myTeams.map(t=>`<div style="display:flex;align-items:center;gap:4px;background:var(--bg3);border:1px solid ${t.color}44;border-radius:6px;padding:4px 8px">
+              <span style="font-size:13px">${t.flag}</span>
+              <span style="font-family:var(--fd);font-size:12px;color:var(--text)">${t.name}</span>
+              <span style="font-family:var(--fd);font-size:11px;color:var(--gold);margin-left:2px">${teamPts(t.id)}pts</span>
+            </div>`).join('')}
+          </div>
+          <div style="font-size:10px;color:var(--muted);letter-spacing:2px;font-family:var(--fd);margin-bottom:6px">PLAYERS</div>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:4px">
+            ${myPlayers.map(pl=>`<div style="background:var(--bg3);border:1px solid var(--border);border-radius:6px;padding:6px 8px;display:flex;justify-content:space-between;align-items:center">
+              <div>
+                <div style="font-family:var(--fd);font-size:12px;color:var(--text)">${pl.name}</div>
+                <div style="display:flex;align-items:center;gap:4px;margin-top:2px">
+                  <span style="font-size:9px;color:${POS_C[pl.pos]||'var(--muted)'};font-family:var(--fd)">${pl.pos}</span>
+                  ${pl.flag?`<span style="font-size:10px">${pl.flag}</span>`:''}
+                </div>
+              </div>
+              ${pl.pts>0?`<span style="font-family:var(--fd);font-size:13px;color:var(--gold)">${pl.pts}</span>`:''}
+            </div>`).join('')}
+          </div>
+        </div>`;
+
+      return`<div class="lb-row${isme?' me':''}" style="flex-direction:column;align-items:stretch;cursor:pointer" onclick="toggleLbExpand('${p.id}')">
+        <div style="display:flex;align-items:center;gap:12px">
+          <div class="lb-rank">${pending?'⏳':med}</div>
+          <div class="lb-info">
+            <div class="lb-name${isme?' me':''}">${displayName}${isme?' <span style="font-size:10px;color:var(--muted)">(YOU)</span>':''}</div>
+            <div class="lb-flags">${flags}</div>
+            <div class="lb-bk">${pending?'<span style="color:var(--gold);font-size:10px">⏳ Player draft pending</span>':`${tp} team · ${pp} player`}</div>
+          </div>
+          <div style="display:flex;flex-direction:column;align-items:flex-end;gap:2px">
+            <div class="lb-s"><div class="lb-pts">${pending?'—':p._sc}</div><div class="lb-pl">${pending?'PENDING':'PTS'}</div></div>
+            <div style="font-size:10px;color:var(--muted)" id="expand-arrow-${p.id}">▼ squad</div>
+          </div>
         </div>
-        <div class="lb-s"><div class="lb-pts">${pending?'—':p._sc}</div><div class="lb-pl">${pending?'PENDING':'PTS'}</div></div>
+        <div id="expand-${p.id}" class="hidden" style="border-top:1px solid var(--border);margin-top:8px">
+          ${expandedHtml}
+        </div>
       </div>`;
     }).join('')+
     `<div style="margin-top:14px"><button class="btn-s" onclick="showS('landing')">← Change League</button></div>`;
+}
+
+function toggleLbExpand(pid){
+  const el=document.getElementById('expand-'+pid);
+  const arrow=document.getElementById('expand-arrow-'+pid);
+  if(!el)return;
+  const hidden=el.classList.contains('hidden');
+  el.classList.toggle('hidden');
+  if(arrow)arrow.textContent=hidden?'▲ squad':'▼ squad';
 }
 
 function renderRoster(){
