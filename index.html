@@ -607,7 +607,9 @@ function getDisplayPlayers(){
     const p=item.player,st=item.statistics?.[0];
     const pos=st?.games?.position||'M';
     const pc=pos.startsWith('G')?'GK':pos==='D'?'DEF':pos==='F'?'FWD':'MID';
-    return{id:String(p.id),name:p.name,pos:pc,pts:pPts(p.id)||pPts(p.name)};
+    const teamCode=p.teamCode||(String(p.id).includes('-')?String(p.id).split('-')[0]:null);
+    const team=teamCode?ALL_TEAMS.find(t=>t.id===teamCode):null;
+    return{id:String(p.id),name:p.name,pos:pc,pts:pPts(p.id)||pPts(p.name),flag:team?.flag||'',teamName:team?.name||''};
   });
 }
 
@@ -615,7 +617,8 @@ function getDisplayPlayers(){
 // FALLBACK PLAYERS — 200+ across all 48 teams
 // ═══════════════════════════════════════════════════════
 function mkp(id,name,pos){
-  return{player:{id,name},statistics:[{games:{position:pos},goals:{total:0,assists:0,saves:0},passes:{accuracy:0,total:0},tackles:{total:0,interceptions:0},dribbles:{success:0},duels:{won:0},cards:{yellow:0,red:0}}]};
+  const teamCode=id.split('-')[0];
+  return{player:{id,name,teamCode},statistics:[{games:{position:pos},goals:{total:0,assists:0,saves:0},passes:{accuracy:0,total:0},tackles:{total:0,interceptions:0},dribbles:{success:0},duels:{won:0},cards:{yellow:0,red:0}}]};
 }
 const FALLBACK=[
   // ── BRAZIL (Group C) ──────────────────────────────
@@ -1345,6 +1348,7 @@ function renderDraft(){
           <div class="pt-meta">
             <div class="pt-dot" style="background:${POS_C[p.pos]||'#888'}"></div>
             <span class="pt-pos" style="color:${POS_C[p.pos]||'#888'}">${p.pos}</span>
+            ${p.flag?`<span style="font-size:11px">${p.flag}</span><span style="font-size:10px;color:var(--muted)">${p.teamName}</span>`:''}
             ${p.pts>0?`<span class="pt-pts">${p.pts}pts</span>`:''}
           </div>
         </div>`;}).join('')}</div>
@@ -1513,6 +1517,7 @@ function renderRoster(){
       <div style="display:flex;align-items:center;gap:5px;margin-top:3px">
         <div style="width:6px;height:6px;border-radius:50%;background:${POS_C[pl.pos]||'#888'}"></div>
         <span style="font-size:9px;color:${POS_C[pl.pos]||'var(--muted)'};font-family:var(--fd)">${pl.pos}</span>
+        ${pl.flag?`<span style="font-size:11px">${pl.flag}</span><span style="font-size:10px;color:var(--muted)">${pl.teamName}</span>`:''}
       </div></div>`).join('')}</div>
     <div class="total-row"><span class="total-lbl">TOTAL SCORE</span><span class="total-pts">${calcScore(p)} pts</span></div>`}`;
 }
