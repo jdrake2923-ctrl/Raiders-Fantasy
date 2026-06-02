@@ -410,7 +410,7 @@ select option{background:var(--bg2)}
 // CONFIG
 // ═══════════════════════════════════════════════════════
 const SB_URL='https://eixsbmlytffcavjvhyeu.supabase.co';
-const SB_KEY='sb_publishable_4XVz6ccd0f2p3SFGe4BhlQ_Rzycmvsw';
+const SB_KEY='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImVpeHNibWx5dGZmY2F2anZoeWV1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzg4ODU0NDYsImV4cCI6MjA5NDQ2MTQ0Nn0._WPytpzCBglfKpwKr4ouNQH9Zfo22X5PBssF77hVn8Q';
 const API_KEY='8305979203083184f47df530e707c2c9';
 const API_BASE='https://v3.football.api-sports.io';
 const WC_LEAGUE=1;
@@ -424,7 +424,9 @@ const DRAFT_OPEN=new Date('2026-06-02T12:00:00-04:00');
 // alter table participants add column if not exists pin_reset boolean default false;
 
 const {createClient}=supabase;
-const db=createClient(SB_URL,SB_KEY);
+const db=createClient(SB_URL,SB_KEY,{
+  auth:{persistSession:false,autoRefreshToken:false,detectSessionInUrl:false},
+});
 
 // ═══════════════════════════════════════════════════════
 // PIN UTILITIES
@@ -1053,11 +1055,23 @@ const FALLBACK=[
 // SUPABASE
 // ═══════════════════════════════════════════════════════
 async function loadLeagues(){
-  const{data}=await db.from('leagues').select('*').order('created_at');
-  S.leagues=data||[];
-  renderLeagues();
-  const{count}=await db.from('participants').select('*',{count:'exact',head:true});
-  document.getElementById('mgr-count').textContent=count||0;
+  try{
+    const{data,error}=await db.from('leagues').select('*').order('created_at');
+    if(error){
+      console.error('League load error:',error);
+      document.getElementById('league-list').innerHTML=`<div class="alert a-err">Connection error: ${error.message}<br>Please refresh the page.</div>`;
+      return;
+    }
+    S.leagues=data||[];
+    renderLeagues();
+    try{
+      const{count}=await db.from('participants').select('*',{count:'exact',head:true});
+      document.getElementById('mgr-count').textContent=count||0;
+    }catch(e){console.warn('Count error:',e);}
+  }catch(e){
+    console.error('League load exception:',e);
+    document.getElementById('league-list').innerHTML=`<div class="alert a-err">Failed to load leagues. Please refresh.<br>${e.message}</div>`;
+  }
 }
 
 function calcScore(p){
