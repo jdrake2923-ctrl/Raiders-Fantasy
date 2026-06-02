@@ -487,30 +487,34 @@ function getCached(k,ttl=60){const r=localStorage.getItem('c_'+k);if(!r)return n
 function setCache(k,d){localStorage.setItem('c_'+k,JSON.stringify({ts:Date.now(),d}));}
 
 async function loadPlayers(){
-  // 1. Check Supabase players table first
-  const{data:dbPlayers,error}=await db.from('players').select('*').eq('active',true).order('team_code').order('position');
-  if(!error&&dbPlayers&&dbPlayers.length>0){
-    // Convert DB format to display format
-    S.players=dbPlayers.map(p=>({
-      player:{id:p.id,name:p.name,teamCode:p.team_code},
-      statistics:[{games:{position:posToCode(p.position)},goals:{total:0,assists:0,saves:0},passes:{accuracy:0,total:0},tackles:{total:0,interceptions:0},dribbles:{success:0},duels:{won:0},cards:{yellow:0,red:0}}]
-    }));
-    calcPlayerPts();
-    return;
-  }
-  // 2. Try API cache
-  const hit=getCached('wc_players',360);
-  if(hit){S.players=hit;calcPlayerPts();return;}
-  // 3. Try live API
-  let all=[];
-  for(let pg=1;pg<=6;pg++){
-    const res=await apiFetch(`/players?league=${WC_LEAGUE}&season=${WC_SEASON}&page=${pg}`);
-    if(!res||res.length===0)break;
-    all=all.concat(res);
-    if(res.length<20)break;
-  }
-  if(all.length>0){S.players=all;setCache('wc_players',all);}
-  else S.players=[];
+  try{
+    // 1. Check Supabase players table first
+    const{data:dbPlayers,error}=await db.from('players').select('*').eq('active',true).order('team_code').order('position');
+    if(!error&&dbPlayers&&dbPlayers.length>0){
+      S.players=dbPlayers.map(p=>({
+        player:{id:p.id,name:p.name,teamCode:p.team_code},
+        statistics:[{games:{position:posToCode(p.position)},goals:{total:0,assists:0,saves:0},passes:{accuracy:0,total:0},tackles:{total:0,interceptions:0},dribbles:{success:0},duels:{won:0},cards:{yellow:0,red:0}}]
+      }));
+      calcPlayerPts();
+      return;
+    }
+  }catch(e){console.warn('Player DB load failed, using fallback:',e);}
+
+  try{
+    // 2. Try local cache
+    const hit=getCached('wc_players',360);
+    if(hit){S.players=hit;calcPlayerPts();return;}
+    // 3. Try live API
+    let all=[];
+    for(let pg=1;pg<=6;pg++){
+      const res=await apiFetch(`/players?league=${WC_LEAGUE}&season=${WC_SEASON}&page=${pg}`);
+      if(!res||res.length===0)break;
+      all=all.concat(res);
+      if(res.length<20)break;
+    }
+    if(all.length>0){S.players=all;setCache('wc_players',all);}
+  }catch(e){console.warn('API player load failed:',e);}
+  // Always falls through to FALLBACK via getDisplayPlayers
   calcPlayerPts();
 }
 
@@ -1950,12 +1954,16 @@ async function handleUrl(){
 // ═══════════════════════════════════════════════════════
 async function init(){
   tick();setInterval(tick,1000);
+  // Load leagues first — this is what shows the page
   await loadLeagues();
-  loadPlayers();
-  loadMatches();
+  // Load players in background — never blocks the page
+  loadPlayers().catch(e=>console.warn('Player load error:',e));
+  loadMatches().catch(e=>console.warn('Match load error:',e));
   setInterval(async()=>{
-    await loadMatches();
-    if(S.currentParticipant){await loadParts();renderGame();}
+    try{
+      await loadMatches();
+      if(S.currentParticipant){await loadParts();renderGame();}
+    }catch(e){console.warn('Refresh error:',e);}
   },5*60*1000);
   await handleUrl();
 }
