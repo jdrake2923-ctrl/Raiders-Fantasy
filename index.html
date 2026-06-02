@@ -487,8 +487,21 @@ function getCached(k,ttl=60){const r=localStorage.getItem('c_'+k);if(!r)return n
 function setCache(k,d){localStorage.setItem('c_'+k,JSON.stringify({ts:Date.now(),d}));}
 
 async function loadPlayers(){
+  // 1. Check Supabase players table first
+  const{data:dbPlayers,error}=await db.from('players').select('*').eq('active',true).order('team_code').order('position');
+  if(!error&&dbPlayers&&dbPlayers.length>0){
+    // Convert DB format to display format
+    S.players=dbPlayers.map(p=>({
+      player:{id:p.id,name:p.name,teamCode:p.team_code},
+      statistics:[{games:{position:posToCode(p.position)},goals:{total:0,assists:0,saves:0},passes:{accuracy:0,total:0},tackles:{total:0,interceptions:0},dribbles:{success:0},duels:{won:0},cards:{yellow:0,red:0}}]
+    }));
+    calcPlayerPts();
+    return;
+  }
+  // 2. Try API cache
   const hit=getCached('wc_players',360);
   if(hit){S.players=hit;calcPlayerPts();return;}
+  // 3. Try live API
   let all=[];
   for(let pg=1;pg<=6;pg++){
     const res=await apiFetch(`/players?league=${WC_LEAGUE}&season=${WC_SEASON}&page=${pg}`);
@@ -497,8 +510,16 @@ async function loadPlayers(){
     if(res.length<20)break;
   }
   if(all.length>0){S.players=all;setCache('wc_players',all);}
-  else S.players=FALLBACK;
+  else S.players=[];
   calcPlayerPts();
+}
+
+function posToCode(pos){
+  if(pos==='GK')return 'G';
+  if(pos==='DEF')return 'D';
+  if(pos==='MID')return 'M';
+  if(pos==='FWD')return 'F';
+  return 'M';
 }
 
 async function loadMatches(){
@@ -1555,6 +1576,114 @@ function mCard(m){
 }
 
 // ═══════════════════════════════════════════════════════
+// ROSTER ADMIN
+// ═══════════════════════════════════════════════════════
+async function saveRoster(){
+  const btn=document.getElementById('roster-save-btn');
+  const alertEl=document.getElementById('roster-alert');
+  const raw=document.getElementById('roster-paste')?.value.trim();
+  const mode=document.getElementById('roster-mode')?.value;
+  if(!raw){alertEl.innerHTML='<div class="alert a-err">Please paste roster data first.</div>';return;}
+
+  // Parse lines
+  const lines=raw.split('\n').map(l=>l.trim()).filter(l=>l.length>0);
+  const players=[];
+  const errors=[];
+  const validPos=['GK','DEF','MID','FWD'];
+  const validTeams=ALL_TEAMS.map(t=>t.id);
+
+  for(let i=0;i<lines.length;i++){
+    const parts=lines[i].split(',').map(p=>p.trim());
+    if(parts.length<3){errors.push(`Line ${i+1}: "${lines[i]}" — need Name, TeamCode, Position`);continue;}
+    const[name,teamCode,pos]=parts;
+    const tc=teamCode.toLowerCase();
+    const p=pos.toUpperCase();
+    if(!validTeams.includes(tc)){errors.push(`Line ${i+1}: "${tc}" is not a valid team code`);continue;}
+    if(!validPos.includes(p)){errors.push(`Line ${i+1}: "${p}" is not valid — use GK DEF MID FWD`);continue;}
+    const id=`${tc}-${name.toLowerCase().replace(/[^a-z0-9]/g,'')}`;
+    players.push({id,name,team_code:tc,position:p,active:true});
+  }
+
+  if(errors.length>0&&players.length===0){
+    alertEl.innerHTML=`<div class="alert a-err"><strong>Errors found:</strong><br>${errors.join('<br>')}</div>`;return;
+  }
+
+  btn.disabled=true;btn.textContent='Saving...';
+
+  // Handle clear modes
+  if(mode==='clear_all'){
+    await db.from('players').delete().neq('id','__none__');
+  } else if(mode==='replace'){
+    const teamCodes=[...new Set(players.map(p=>p.team_code))];
+    for(const tc of teamCodes){
+      await db.from('players').delete().eq('team_code',tc);
+    }
+  }
+
+  // Upsert players
+  const{error}=await db.from('players').upsert(players,{onConflict:'id'});
+  if(error){
+    alertEl.innerHTML=`<div class="alert a-err">${error.message}</div>`;
+    btn.disabled=false;btn.textContent='💾 SAVE ROSTER';return;
+  }
+
+  let msg=`<div class="alert a-ok">✓ ${players.length} players saved successfully!</div>`;
+  if(errors.length>0)msg+=`<div class="alert a-warn" style="margin-top:6px"><strong>${errors.length} lines skipped:</strong><br>${errors.join('<br>')}</div>`;
+  alertEl.innerHTML=msg;
+  btn.disabled=false;btn.textContent='💾 SAVE ROSTER';
+  document.getElementById('roster-paste').value='';
+
+  // Reload player list
+  await loadPlayers();
+  loadRosterPreview();
+  updateRosterCount();
+}
+
+async function loadRosterPreview(){
+  const el=document.getElementById('roster-preview');
+  const filterTeam=document.getElementById('filter-team-roster')?.value;
+  if(!el)return;
+  el.innerHTML='<div style="color:var(--muted)">Loading...</div>';
+  let query=db.from('players').select('*').eq('active',true).order('team_code').order('position').order('name');
+  if(filterTeam)query=query.eq('team_code',filterTeam);
+  const{data,error}=await query;
+  if(error||!data||data.length===0){el.innerHTML='<div style="color:var(--muted)">No players loaded yet.</div>';return;}
+  const byTeam={};
+  data.forEach(p=>{if(!byTeam[p.team_code])byTeam[p.team_code]=[];byTeam[p.team_code].push(p);});
+  el.innerHTML=Object.entries(byTeam).map(([tc,players])=>{
+    const team=ALL_TEAMS.find(t=>t.id===tc);
+    return`<div style="margin-bottom:10px">
+      <div style="font-family:var(--fd);font-size:13px;color:var(--gold);margin-bottom:4px">${team?.flag||''} ${team?.name||tc.toUpperCase()} (${players.length})</div>
+      ${players.map(p=>`<div style="display:flex;justify-content:space-between;padding:3px 0;border-bottom:1px solid #1C305420">
+        <span style="color:var(--text)">${p.name}</span>
+        <span style="color:${POS_C[p.position]||'var(--muted)'};font-family:var(--fd);font-size:12px">${p.position}</span>
+      </div>`).join('')}
+    </div>`;
+  }).join('');
+}
+
+async function clearTeamRoster(){
+  const filterTeam=document.getElementById('filter-team-roster')?.value;
+  const team=ALL_TEAMS.find(t=>t.id===filterTeam);
+  if(!filterTeam){alert('Select a team to clear first.');return;}
+  if(!confirm(`Clear all players for ${team?.name||filterTeam}? This cannot be undone.`))return;
+  await db.from('players').delete().eq('team_code',filterTeam);
+  document.getElementById('roster-alert').innerHTML=`<div class="alert a-ok">✓ ${team?.name||filterTeam} roster cleared.</div>`;
+  await loadPlayers();
+  loadRosterPreview();
+  updateRosterCount();
+}
+
+async function updateRosterCount(){
+  const{count}=await db.from('players').select('*',{count:'exact',head:true}).eq('active',true);
+  const el=document.getElementById('roster-count-badge');
+  if(el){
+    el.textContent=count>0?`✓ ${count} players`:'⚠️ Using fallback list';
+    el.className=`api-tag ${count>0?'api-ok':'api-wait'}`;
+  }
+}
+
+// ═══════════════════════════════════════════════════════
 // COMMISSIONER
 // ═══════════════════════════════════════════════════════
 function showCommLogin(){
@@ -1582,7 +1711,51 @@ async function renderComm(){
       <div class="sr"><span class="sr-lbl">Pre-Registration</span><span class="api-tag api-ok">✓ Open Now</span></div>
       <div class="sr"><span class="sr-lbl">Player Draft Opens</span><span style="font-family:var(--fd);font-size:12px;color:var(--gold)">JUNE 2, 2026</span></div>
       <div class="sr"><span class="sr-lbl">Tournament Starts</span><span style="font-family:var(--fd);font-size:12px;color:var(--gold)">JUNE 11, 2026</span></div>
+      <div class="sr"><span class="sr-lbl">Roster Players Loaded</span><span class="api-tag api-ok" id="roster-count-badge">Loading...</span></div>
     </div>
+
+    <div class="cc">
+      <div class="cc-title">📋 ROSTER MANAGER</div>
+      <div style="font-size:13px;color:var(--muted);margin-bottom:14px;line-height:1.6">
+        Paste official squad data below. Format: one player per line as<br>
+        <code style="background:var(--bg3);padding:2px 6px;border-radius:4px;font-size:12px;color:var(--green)">Name, TEAM_CODE, POS</code><br><br>
+        Example:<br>
+        <code style="background:var(--bg3);padding:2px 6px;border-radius:4px;font-size:12px;color:var(--green)">Lamine Yamal, esp, FWD</code><br>
+        <code style="background:var(--bg3);padding:2px 6px;border-radius:4px;font-size:12px;color:var(--green)">Rodri, esp, MID</code><br>
+        <code style="background:var(--bg3);padding:2px 6px;border-radius:4px;font-size:12px;color:var(--green)">Unai Simón, esp, GK</code><br><br>
+        <strong style="color:var(--text)">Team codes:</strong> bra arg fra eng esp por ger usa ned bel cro mar sen mex can uru jpn kor aus swe col ecu nor sui aut tur irn egy gha civ tun par qat rsa sco alg jor cod uzb irq bih cze hai cur nzl cpv ksa pan
+      </div>
+      <div style="display:flex;gap:10px;margin-bottom:10px;flex-wrap:wrap">
+        <select class="sel-f" id="roster-mode" style="flex:1">
+          <option value="add">Add players (keep existing)</option>
+          <option value="replace">Replace team roster (clears that team first)</option>
+          <option value="clear_all">Clear ALL players and reload</option>
+        </select>
+      </div>
+      <textarea id="roster-paste" style="width:100%;background:var(--bg3);border:1px solid var(--border);color:var(--text);font-size:12px;font-family:monospace;padding:12px;border-radius:8px;outline:none;resize:vertical;min-height:180px;margin-bottom:10px" placeholder="Paste roster here...
+Example:
+Lamine Yamal, esp, FWD
+Rodri, esp, MID
+Unai Simón, esp, GK
+Rúben Dias, por, DEF"></textarea>
+      <button class="btn-p" onclick="saveRoster()" style="width:100%;margin-bottom:8px" id="roster-save-btn">💾 SAVE ROSTER</button>
+      <div id="roster-alert"></div>
+      <div class="divider"></div>
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
+        <div style="font-size:11px;color:var(--muted);letter-spacing:2px;font-family:var(--fd)">LOADED PLAYERS</div>
+        <div style="display:flex;gap:8px">
+          <button class="copy-btn" onclick="loadRosterPreview()">🔄 REFRESH LIST</button>
+          <button class="copy-btn" style="color:var(--red);border-color:var(--red)" onclick="clearTeamRoster()">🗑️ CLEAR TEAM</button>
+        </div>
+      </div>
+      <div style="margin-bottom:8px">
+        <select class="sel-f" id="filter-team-roster" style="width:100%" onchange="loadRosterPreview()">
+          <option value="">— Filter by team —</option>
+          ${ALL_TEAMS.map(t=>`<option value="${t.id}">${t.flag} ${t.name}</option>`).join('')}
+        </select>
+      </div>
+      <div id="roster-preview" style="max-height:240px;overflow-y:auto;font-size:12px;color:var(--muted)">Click Refresh List to view loaded players.</div>
+    </div>`;
     <div class="cc">
       <div class="cc-title">CREATE LEAGUE</div>
       <input class="field" id="nl-n" placeholder="League name (e.g. St. Pete Raiders Parents League)" style="margin-bottom:10px"/>
@@ -1670,6 +1843,8 @@ async function renderComm(){
       }
     }
   }
+  // Load roster count and preview
+  updateRosterCount();
 }
 
 async function createLeague(){
