@@ -287,7 +287,7 @@ select option{background:var(--bg2)}
         <div class="sc"><span id="mgr-count" class="sc-n">—</span><span class="sc-l">MANAGERS</span></div>
       </div>
       <div class="cd-banner" id="cd-banner">
-        <div class="cd-label">TOURNAMENT KICKOFF COUNTDOWN</div>
+        <div class="cd-label">DRAFT OPENS JUNE 2 · TOURNAMENT KICKS OFF JUNE 11</div>
         <div class="cd-grid">
           <div class="cd-unit"><span class="cd-num" id="cd-d">--</span><span class="cd-lbl">DAYS</span></div>
           <div class="cd-sep">:</div>
@@ -297,7 +297,7 @@ select option{background:var(--bg2)}
           <div class="cd-sep">:</div>
           <div class="cd-unit"><span class="cd-num" id="cd-s">--</span><span class="cd-lbl">SEC</span></div>
         </div>
-        <div class="cd-note"><strong>June 11, 2026</strong> — Tournament kicks off. Draft is <strong style="color:var(--green)">OPEN NOW</strong> — pick your teams and players!</div>
+        <div class="cd-note">Pick your 3 teams now. <strong>Player draft opens June 2</strong> once rosters are confirmed. Tournament kicks off <strong>June 11.</strong></div>
       </div>
       <div style="font-family:var(--fd);font-size:12px;letter-spacing:2px;color:var(--muted);margin-bottom:10px">SELECT YOUR LEAGUE</div>
       <div class="ll" id="league-list"><div class="loading"><div class="spin"></div> Loading...</div></div>
@@ -416,7 +416,7 @@ const API_BASE='https://v3.football.api-sports.io';
 const WC_LEAGUE=1;
 const WC_SEASON=2026;
 const COMM_PW='jahluvSegovia83$';
-const DRAFT_OPEN=new Date('2026-05-01T00:00:00-04:00');
+const DRAFT_OPEN=new Date('2026-06-02T12:00:00-04:00');
 
 // ⚠️ SUPABASE NOTE: Run these SQL statements if columns are missing:
 // alter table participants add column if not exists team_name text;
@@ -686,7 +686,7 @@ const FALLBACK=[
   mkp('por-1','Diogo Costa','G'),
   mkp('por-2','Cancelo','D'),
   mkp('por-3','Rúben Dias','D'),
-  mkp('por-4','Pepe','D'),
+  mkp('por-4','Inácio','D'),
   mkp('por-5','Bruno Fernandes','M'),
   mkp('por-6','Vitinha','M'),
   mkp('por-7','Bernardo Silva','M'),
@@ -698,13 +698,12 @@ const FALLBACK=[
   mkp('ger-2','Kimmich','D'),
   mkp('ger-3','Rüdiger','D'),
   mkp('ger-4','Schlotterbeck','D'),
-  mkp('ger-5','Kroos','M'),
-  mkp('ger-6','Gündoğan','M'),
-  mkp('ger-7','Musiala','M'),
-  mkp('ger-8','Wirtz','F'),
+  mkp('ger-5','Gündoğan','M'),
+  mkp('ger-6','Musiala','M'),
+  mkp('ger-7','Wirtz','M'),
+  mkp('ger-8','Havertz','F'),
   mkp('ger-9','Gnabry','F'),
   mkp('ger-10','Füllkrug','F'),
-  mkp('ger-11','Havertz','F'),
   // ── USA (Group D) ─────────────────────────────────
   mkp('usa-1','Turner','G'),
   mkp('usa-2','Dest','D'),
@@ -722,9 +721,9 @@ const FALLBACK=[
   mkp('ned-2','Dumfries','D'),
   mkp('ned-3','Van Dijk','D'),
   mkp('ned-4','De Ligt','D'),
-  mkp('ned-5','De Bruyne','M'),
-  mkp('ned-6','Schouten','M'),
-  mkp('ned-7','Frimpong','M'),
+  mkp('ned-5','Schouten','M'),
+  mkp('ned-6','Frimpong','M'),
+  mkp('ned-7','Reijnders','M'),
   mkp('ned-8','Gakpo','F'),
   mkp('ned-9','Doku','F'),
   mkp('ned-10','Depay','F'),
@@ -734,9 +733,9 @@ const FALLBACK=[
   mkp('bel-2','Castagne','D'),
   mkp('bel-3','Faes','D'),
   mkp('bel-4','Vertonghen','D'),
-  mkp('bel-5','De Bruyne','M'),
-  mkp('bel-6','Tielemans','M'),
-  mkp('bel-7','Onana','M'),
+  mkp('bel-5','Tielemans','M'),
+  mkp('bel-6','Onana','M'),
+  mkp('bel-7','Vanaken','M'),
   mkp('bel-8','Doku','F'),
   mkp('bel-9','Lukaku','F'),
   mkp('bel-10','Openda','F'),
@@ -744,11 +743,11 @@ const FALLBACK=[
   mkp('cro-1','Livakovic','G'),
   mkp('cro-2','Gvardiol','D'),
   mkp('cro-3','Sutalo','D'),
-  mkp('cro-4','Modrić','M'),
-  mkp('cro-5','Kovačić','M'),
-  mkp('cro-6','Brozović','M'),
+  mkp('cro-4','Kovačić','M'),
+  mkp('cro-5','Pasalic','M'),
+  mkp('cro-6','Ivanusec','M'),
   mkp('cro-7','Budimir','F'),
-  mkp('cro-8','Petković','F'),
+  mkp('cro-8','Kramarić','F'),
   // ── MOROCCO (Group C) ─────────────────────────────
   mkp('mar-1','Bounou','G'),
   mkp('mar-2','Hakimi','D'),
@@ -772,11 +771,12 @@ const FALLBACK=[
   mkp('mex-1','Ochoa','G'),
   mkp('mex-2','Sánchez','D'),
   mkp('mex-3','Montes','D'),
-  mkp('mex-4','Herrera','M'),
-  mkp('mex-5','Guardado','M'),
-  mkp('mex-6','Lozano','F'),
-  mkp('mex-7','Jiménez','F'),
-  mkp('mex-8','Martín','F'),
+  mkp('mex-4','Álvarez','D'),
+  mkp('mex-5','Herrera','M'),
+  mkp('mex-6','Romo','M'),
+  mkp('mex-7','Lozano','F'),
+  mkp('mex-8','Jiménez','F'),
+  mkp('mex-9','Martín','F'),
   // ── CANADA (Group B) ──────────────────────────────
   mkp('can-1','Crepeau','G'),
   mkp('can-2','Johnston','D'),
@@ -1049,10 +1049,8 @@ function showS(id){document.querySelectorAll('.screen').forEach(s=>s.classList.r
 // ═══════════════════════════════════════════════════════
 // COUNTDOWN
 // ═══════════════════════════════════════════════════════
-const TOURNAMENT_START=new Date('2026-06-11T17:00:00-04:00');
-
 function tick(){
-  const diff=TOURNAMENT_START-new Date();
+  const diff=DRAFT_OPEN-new Date();
   if(diff<=0){document.getElementById('cd-banner').style.display='none';return;}
   document.getElementById('cd-d').textContent=String(Math.floor(diff/86400000)).padStart(2,'0');
   document.getElementById('cd-h').textContent=String(Math.floor(diff%86400000/3600000)).padStart(2,'0');
