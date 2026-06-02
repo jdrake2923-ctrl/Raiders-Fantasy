@@ -469,7 +469,8 @@ const S={
   leagues:[],currentLeague:null,currentParticipant:null,participants:[],
   players:[],playerPts:{},teamResults:{},matches:[],
   draftStep:0,draftName:'',draftTeamName:'',draftPinHash:'',draftTeams:[],draftPlayers:[],
-  posFilter:'ALL',takenTeams:[],takenPlayers:[],
+  posFilter:'ALL',playerSearch:'',playerSort:'name',
+  takenTeams:[],takenPlayers:[],
   apiStatus:'pending',
 };
 
@@ -1311,7 +1312,7 @@ function removeOv(){const e=document.getElementById('lc-ov');if(e)e.remove();}
 // ═══════════════════════════════════════════════════════
 // DRAFT
 // ═══════════════════════════════════════════════════════
-function startDraft(){S.draftStep=0;S.draftName='';S.draftTeamName='';S.draftTeams=[];S.draftPlayers=[];S.posFilter='ALL';renderDraft();showS('draft');}
+function startDraft(){S.draftStep=0;S.draftName='';S.draftTeamName='';S.draftPinHash='';S.draftTeams=[];S.draftPlayers=[];S.posFilter='ALL';S.playerSearch='';S.playerSort='name';renderDraft();showS('draft');}
 
 function startPlayerDraft(){
   S.draftStep=2;S.draftName=S.currentParticipant.name;
@@ -1368,15 +1369,47 @@ function renderDraft(){
     const isHybrid=S.currentLeague.draft_mode==='hybrid';
     const excl=!isSolo&&!isHybrid;
     const all=getDisplayPlayers();
-    const fil=S.posFilter==='ALL'?all:all.filter(p=>p.pos===S.posFilter);
+
+    // Apply position filter
+    let fil=S.posFilter==='ALL'?all:all.filter(p=>p.pos===S.posFilter);
+
+    // Apply search filter
+    const search=(S.playerSearch||'').toLowerCase().trim();
+    if(search){
+      fil=fil.filter(p=>
+        p.name.toLowerCase().includes(search)||
+        p.teamName.toLowerCase().includes(search)
+      );
+    }
+
+    // Apply sort
+    const sort=S.playerSort||'name';
+    if(sort==='name') fil=[...fil].sort((a,b)=>a.name.localeCompare(b.name));
+    else if(sort==='team') fil=[...fil].sort((a,b)=>a.teamName.localeCompare(b.teamName)||a.name.localeCompare(b.name));
+    else if(sort==='pos'){
+      const posOrder={GK:0,DEF:1,MID:2,FWD:3};
+      fil=[...fil].sort((a,b)=>(posOrder[a.pos]||0)-(posOrder[b.pos]||0)||a.name.localeCompare(b.name));
+    }
     body.innerHTML=`<div class="step-card">
       <div class="step-title">PICK 11 PLAYERS</div>
       <div class="step-sub">Select 11 players for your squad${excl?' · Dimmed players are already taken':''}</div>
       <div class="alert a-warn" style="margin-bottom:12px;font-size:12px">
-        ⭐ Showing <strong>${getDisplayPlayers().length} featured players</strong>. Full World Cup rosters (~700 players) load automatically from FIFA once the tournament begins June 11. Pick your favorites now — you can pick any player across all 48 nations.
+        ⭐ Showing <strong>${getDisplayPlayers().length} players</strong>. Full live stats update automatically once the tournament begins June 11.
       </div>
       <div class="counter"><span>${S.draftPlayers.length}</span>/11 selected</div>
-      <div class="pos-bar">${['ALL','GK','DEF','MID','FWD'].map(pos=>`<button class="pp${S.posFilter===pos?' on':''}" onclick="setPF('${pos}')">${pos}</button>`).join('')}</div>
+
+      <input class="field" id="player-search" placeholder="🔍 Search by player or country name..." value="${S.playerSearch||''}"
+        oninput="S.playerSearch=this.value;renderDraft()" style="margin-bottom:8px;padding:9px 12px;font-size:13px"/>
+
+      <div style="display:flex;gap:6px;margin-bottom:10px;align-items:center;flex-wrap:wrap">
+        <div class="pos-bar" style="margin-bottom:0;flex:1">${['ALL','GK','DEF','MID','FWD'].map(pos=>`<button class="pp${S.posFilter===pos?' on':''}" onclick="setPF('${pos}')">${pos}</button>`).join('')}</div>
+        <select style="background:var(--bg3);border:1px solid var(--border);color:var(--muted);font-size:11px;padding:4px 8px;border-radius:6px;font-family:var(--fb);outline:none" onchange="S.playerSort=this.value;renderDraft()">
+          <option value="name" ${(S.playerSort||'name')==='name'?'selected':''}>A–Z Name</option>
+          <option value="team" ${S.playerSort==='team'?'selected':''}>By Country</option>
+          <option value="pos" ${S.playerSort==='pos'?'selected':''}>By Position</option>
+        </select>
+      </div>
+
       <div class="pgrid">${fil.map(p=>{
         const sel=S.draftPlayers.includes(p.id);
         const na=(excl&&S.takenPlayers.includes(p.id)&&!sel)||(S.draftPlayers.length>=11&&!sel);
@@ -1388,7 +1421,8 @@ function renderDraft(){
             ${p.flag?`<span style="font-size:11px">${p.flag}</span><span style="font-size:10px;color:var(--muted)">${p.teamName}</span>`:''}
             ${p.pts>0?`<span class="pt-pts">${p.pts}pts</span>`:''}
           </div>
-        </div>`;}).join('')}</div>
+        </div>`;}).join('')}
+      ${fil.length===0?`<div style="color:var(--muted);font-size:13px;padding:20px;grid-column:1/-1;text-align:center">No players found. Try a different search.</div>`:''}</div>
       <div class="btn-row">
         <button class="btn-s" onclick="S.draftStep=1;renderDraft()">← BACK</button>
         <button class="btn-p" ${S.draftPlayers.length<11?'disabled':''} onclick="S.draftStep=3;renderDraft()">NEXT →</button>
