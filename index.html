@@ -1135,13 +1135,20 @@ async function enterLeague(id){
   }
   const saved=localStorage.getItem('p_'+l.id);
   if(saved){
-    const p=JSON.parse(saved);
-    // If PIN reset by commissioner, force PIN setup
-    if(p.pin_reset){
-      S.currentLeague=l;
-      showSetNewPin(p);return;
+    const localP=JSON.parse(saved);
+    // Always refresh from Supabase to catch player draft completions
+    const{data:fresh}=await db.from('participants').select('*').eq('id',localP.id).single();
+    if(fresh){
+      // Check if PIN was reset by commissioner
+      if(fresh.pin_reset){
+        S.currentLeague=l;
+        showSetNewPin(fresh);return;
+      }
+      S.currentParticipant=fresh;
+      localStorage.setItem('p_'+l.id,JSON.stringify(fresh));
+    } else {
+      S.currentParticipant=localP;
     }
-    S.currentParticipant=p;
     await loadParts();
     if(S.currentParticipant.players.length===0&&new Date()>=DRAFT_OPEN){
       S.draftStep=2;S.draftName=S.currentParticipant.name;
@@ -1525,6 +1532,14 @@ async function submitDraft(){
 async function loadParts(){
   const{data}=await db.from('participants').select('*').eq('league_id',S.currentLeague.id);
   S.participants=(data||[]).map(p=>({...p,_sc:calcScore(p)})).sort((a,b)=>b._sc-a._sc);
+  // Refresh currentParticipant from live DB data to stay in sync
+  if(S.currentParticipant){
+    const fresh=S.participants.find(p=>p.id===S.currentParticipant.id);
+    if(fresh){
+      S.currentParticipant=fresh;
+      localStorage.setItem('p_'+S.currentLeague.id,JSON.stringify(fresh));
+    }
+  }
 }
 
 function renderGame(){
