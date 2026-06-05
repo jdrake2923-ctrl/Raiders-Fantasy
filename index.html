@@ -628,7 +628,27 @@ function calcPlayerPts(){
   }
   S.playerPts=pts;
 }
-function pPts(id){return S.playerPts[id]||S.playerPts[String(id)]||0;}
+function pPts(id){
+  // Try direct ID match first
+  if(S.playerPts[id]||S.playerPts[String(id)]) return S.playerPts[id]||S.playerPts[String(id)];
+  // Fall back to name match — find player by ID in display list then look up by name
+  const allP=S.players.length>0?S.players:FALLBACK;
+  const found=allP.find(item=>String(item.player?.id)===String(id));
+  if(found&&found.player?.name) return S.playerPts[found.player.name]||0;
+  return 0;
+}
+
+function getPlayerName(id){
+  const allP=S.players.length>0?S.players:FALLBACK;
+  const found=allP.find(item=>String(item.player?.id)===String(id));
+  return found?.player?.name||null;
+}
+
+function calcScore(p){
+  const t=(p.teams||[]).reduce((s,id)=>s+teamPts(id),0);
+  const pl=(p.players||[]).reduce((s,id)=>s+(pPts(id)||0),0);
+  return t+pl;
+}
 
 function getDisplayPlayers(){
   const src=S.players.length>0?S.players:FALLBACK;
@@ -640,6 +660,26 @@ function getDisplayPlayers(){
     const team=teamCode?ALL_TEAMS.find(t=>t.id===teamCode):null;
     return{id:String(p.id),name:p.name,pos:pc,pts:pPts(p.id)||pPts(p.name),flag:team?.flag||'',teamName:team?.name||''};
   });
+}
+
+function findPlayerById(id){
+  const allP=getDisplayPlayers();
+  let found=allP.find(pl=>pl.id===String(id));
+  if(found) return found;
+  // Name fallback
+  const allRaw=S.players.length>0?S.players:FALLBACK;
+  const raw=allRaw.find(item=>String(item.player?.id)===String(id));
+  if(raw&&raw.player?.name){
+    found=allP.find(pl=>pl.name===raw.player.name);
+    if(found) return found;
+    // Build minimal display object
+    const pos=raw.statistics?.[0]?.games?.position||'M';
+    const pc=pos.startsWith('G')?'GK':pos==='D'?'DEF':pos==='F'?'FWD':'MID';
+    const tc=raw.player?.teamCode||(String(raw.player?.id||'').includes('-')?String(raw.player?.id).split('-')[0]:null);
+    const team=tc?ALL_TEAMS.find(t=>t.id===tc):null;
+    return{id:String(raw.player.id),name:raw.player.name,pos:pc,pts:0,flag:team?.flag||'',teamName:team?.name||''};
+  }
+  return null;
 }
 
 // ═══════════════════════════════════════════════════════
@@ -1076,11 +1116,6 @@ async function loadLeagues(){
   }
 }
 
-function calcScore(p){
-  const t=(p.teams||[]).reduce((s,id)=>s+teamPts(id),0);
-  const pl=(p.players||[]).reduce((s,id)=>s+(pPts(id)||0),0);
-  return t+pl;
-}
 
 // ═══════════════════════════════════════════════════════
 // SCREENS
@@ -1569,7 +1604,7 @@ function renderLB(){
       const displayName=`${p.team_name||p.name} · ${firstName}`;
       const allP=getDisplayPlayers();
       const myTeams=ALL_TEAMS.filter(t=>(p.teams||[]).includes(t.id));
-      const myPlayers=(p.players||[]).map(id=>allP.find(pl=>pl.id===id)).filter(Boolean);
+      const myPlayers=(p.players||[]).map(id=>findPlayerById(id)).filter(Boolean);
 
       const expandedHtml=pending?
         `<div style="padding:10px 0 4px;font-size:12px;color:var(--gold)">⏳ Player draft pending</div>`:
@@ -1633,7 +1668,7 @@ function renderRoster(){
   if(!p){el.innerHTML='<div style="color:var(--muted);padding:20px;text-align:center">Select a league and register to see your roster.</div>';return;}
   const myT=ALL_TEAMS.filter(t=>(p.teams||[]).includes(t.id));
   const allP=getDisplayPlayers();
-  const myP=(p.players||[]).map(id=>allP.find(pl=>pl.id===id)).filter(Boolean);
+  const myP=(p.players||[]).map(id=>findPlayerById(id)).filter(Boolean);
   const pending=p.players.length===0;
   el.innerHTML=`<div class="sec-head">MY TEAMS</div>
     ${myT.map(t=>{const r=S.teamResults[t.id]||{w:0,d:0,l:0};return`<div class="r-team" style="border-color:${t.color}44">
