@@ -1172,7 +1172,8 @@ async function enterLeague(id){
   if(saved){
     const localP=JSON.parse(saved);
     // Always refresh from Supabase to catch player draft completions
-    const{data:fresh}=await db.from('participants').select('*').eq('id',localP.id).single();
+    const{data:freshData}=await db.from('participants').select('*').eq('id',localP.id);
+    const fresh=Array.isArray(freshData)?freshData[0]:freshData;
     if(fresh){
       // Check if PIN was reset by commissioner
       if(fresh.pin_reset){
@@ -1277,28 +1278,30 @@ function showPinEntry(lid,p,containerEl){
 }
 
 async function showPinEntryById(lid,pid){
-  const{data}=await db.from('participants').select('*').eq('id',pid).single();
-  if(data)showPinEntry(lid,data,null);
+  const{data}=await db.from('participants').select('*').eq('id',pid);
+  const p=Array.isArray(data)?data[0]:data;
+  if(p)showPinEntry(lid,p,null);
 }
 
 async function checkPin(pid,lid){
   const pin=document.getElementById('pin-entry')?.value.trim();
   if(!pin||pin.length!==4){alert('Please enter your 4-digit PIN.');return;}
-  const{data}=await db.from('participants').select('*').eq('id',pid).single();
-  if(!data){alert('Account not found.');return;}
-  const valid=await verifyPin(pin,data.pin_hash);
+  const{data}=await db.from('participants').select('*').eq('id',pid);
+  const p=Array.isArray(data)?data[0]:data;
+  if(!p){alert('Account not found.');return;}
+  const valid=await verifyPin(pin,p.pin_hash);
   if(!valid){
     const el=document.getElementById('pin-entry');
     if(el){el.value='';el.style.borderColor='var(--red)';el.placeholder='Incorrect PIN — try again';}
     return;
   }
   const l=S.leagues.find(x=>x.id===lid);
-  S.currentLeague=l;S.currentParticipant=data;
-  localStorage.setItem('p_'+lid,JSON.stringify(data));
+  S.currentLeague=l;S.currentParticipant=p;
+  localStorage.setItem('p_'+lid,JSON.stringify(p));
   removeOv();await loadParts();
-  if(data.players.length===0&&new Date()>=DRAFT_OPEN){
-    S.draftStep=2;S.draftName=data.name;S.draftTeamName=data.team_name||'';
-    S.draftTeams=data.teams;S.draftPlayers=[];renderDraft();showS('draft');return;
+  if(p.players.length===0&&new Date()>=DRAFT_OPEN){
+    S.draftStep=2;S.draftName=p.name;S.draftTeamName=p.team_name||'';
+    S.draftTeams=p.teams;S.draftPlayers=[];renderDraft();showS('draft');return;
   }
   renderGame();showS('game');
 }
@@ -1309,15 +1312,16 @@ async function saveNewPin(pid,lid){
   if(!pin||pin.length!==4||!/^\d{4}$/.test(pin)){alert('Please enter a 4-digit PIN (numbers only).');return;}
   if(pin!==pin2){alert('PINs do not match.');return;}
   const hash=await hashPin(pin);
-  const{data,error}=await db.from('participants').update({pin_hash:hash,pin_reset:false}).eq('id',pid).select().single();
+  const{data,error}=await db.from('participants').update({pin_hash:hash,pin_reset:false}).eq('id',pid).select();
   if(error){alert('Error saving PIN: '+error.message);return;}
+  const p=Array.isArray(data)?data[0]:data;
   const l=S.leagues.find(x=>x.id===lid);
-  S.currentLeague=l;S.currentParticipant=data;
-  localStorage.setItem('p_'+lid,JSON.stringify(data));
+  S.currentLeague=l;S.currentParticipant=p;
+  localStorage.setItem('p_'+lid,JSON.stringify(p));
   removeOv();await loadParts();
-  if(data.players.length===0&&new Date()>=DRAFT_OPEN){
-    S.draftStep=2;S.draftName=data.name;S.draftTeamName=data.team_name||'';
-    S.draftTeams=data.teams;S.draftPlayers=[];renderDraft();showS('draft');return;
+  if(p.players.length===0&&new Date()>=DRAFT_OPEN){
+    S.draftStep=2;S.draftName=p.name;S.draftTeamName=p.team_name||'';
+    S.draftTeams=p.teams;S.draftPlayers=[];renderDraft();showS('draft');return;
   }
   renderGame();showS('game');
 }
@@ -1546,17 +1550,20 @@ async function submitDraft(){
   const preReg=new Date()<DRAFT_OPEN;
   const completing=S.currentParticipant&&S.currentParticipant.players.length===0&&!preReg;
   if(completing){
-    const{data,error}=await db.from('participants').update({players:S.draftPlayers}).eq('id',S.currentParticipant.id).select().single();
+    const{data:updData,error}=await db.from('participants').update({players:S.draftPlayers}).eq('id',S.currentParticipant.id).select();
     if(error){document.getElementById('sub-alert').innerHTML=`<div class="alert a-err">${error.message}</div>`;btn.disabled=false;btn.textContent='COMPLETE DRAFT ⚡';return;}
+    const data=Array.isArray(updData)?updData[0]:updData;
     S.currentParticipant=data;localStorage.setItem('p_'+S.currentLeague.id,JSON.stringify(data));
     await loadParts();renderGame();showS('game');return;
   }
-  const{data,error}=await db.from('participants').insert({
+  const{data:insertData,error}=await db.from('participants').insert({
     league_id:S.currentLeague.id,name:S.draftName,team_name:S.draftTeamName,
     pin_hash:S.draftPinHash,pin_reset:false,
     teams:S.draftTeams,players:preReg?[]:S.draftPlayers,
-  }).select().single();
+  }).select();
   if(error){document.getElementById('sub-alert').innerHTML=`<div class="alert a-err">${error.message}</div>`;btn.disabled=false;btn.textContent=preReg?'REGISTER NOW ⚡':'JOIN LEAGUE ⚡';return;}
+  const data=Array.isArray(insertData)?insertData[0]:insertData;
+  if(!data){document.getElementById('sub-alert').innerHTML=`<div class="alert a-err">Registration failed — please try again.</div>`;btn.disabled=false;btn.textContent=preReg?'REGISTER NOW ⚡':'JOIN LEAGUE ⚡';return;}
   S.currentParticipant=data;localStorage.setItem('p_'+S.currentLeague.id,JSON.stringify(data));
   await loadParts();renderGame();showS('game');
 }
