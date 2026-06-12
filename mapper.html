@@ -1,0 +1,275 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Player ID Mapper</title>
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: -apple-system, sans-serif; background: #f5f5f5; padding: 16px; }
+h1 { font-size: 18px; font-weight: 600; margin-bottom: 4px; }
+.sub { font-size: 13px; color: #666; margin-bottom: 16px; }
+.card { background: white; border-radius: 12px; padding: 16px; margin-bottom: 12px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
+button { width: 100%; padding: 14px; background: #007AFF; color: white; border: none; border-radius: 10px; font-size: 16px; font-weight: 600; cursor: pointer; margin-bottom: 8px; }
+button:disabled { background: #aaa; }
+button.secondary { background: #34C759; }
+button.copy { background: #5856D6; }
+.log { font-size: 12px; color: #333; font-family: monospace; max-height: 200px; overflow-y: auto; background: #f0f0f0; padding: 10px; border-radius: 8px; margin-top: 8px; }
+.log div { margin-bottom: 2px; }
+.log .ok { color: #1a7a1a; }
+.log .warn { color: #b85c00; }
+.log .err { color: #cc0000; }
+.sql-box { font-size: 11px; font-family: monospace; background: #1e1e1e; color: #d4d4d4; padding: 12px; border-radius: 8px; max-height: 300px; overflow-y: auto; white-space: pre-wrap; word-break: break-all; margin-top: 8px; }
+.stat { display: flex; justify-content: space-between; font-size: 13px; padding: 4px 0; border-bottom: 1px solid #f0f0f0; }
+.stat:last-child { border-bottom: none; }
+.stat .val { font-weight: 600; }
+.val.green { color: #1a7a1a; }
+.val.orange { color: #b85c00; }
+.val.red { color: #cc0000; }
+#progress { height: 6px; background: #e0e0e0; border-radius: 3px; margin: 8px 0; overflow: hidden; }
+#progress-bar { height: 100%; background: #007AFF; border-radius: 3px; transition: width 0.3s; width: 0%; }
+</style>
+</head>
+<body>
+
+<h1>Player ID Mapper</h1>
+<p class="sub">Matches your drafted player slugs to API-Football numeric IDs</p>
+
+<div class="card">
+  <button id="btn-run" onclick="runMapper()">Step 1 — Fetch & Match All Players</button>
+  <div id="progress"><div id="progress-bar"></div></div>
+  <div id="log" class="log" style="display:none"></div>
+</div>
+
+<div class="card" id="stats-card" style="display:none">
+  <div class="stat"><span>Total slugs</span><span class="val" id="s-total">0</span></div>
+  <div class="stat"><span>Matched</span><span class="val green" id="s-matched">0</span></div>
+  <div class="stat"><span>Unmatched</span><span class="val orange" id="s-unmatched">0</span></div>
+  <div class="stat"><span>Already in map</span><span class="val" id="s-existing">0</span></div>
+</div>
+
+<div class="card" id="sql-card" style="display:none">
+  <div style="font-size:13px;font-weight:600;margin-bottom:8px">Generated SQL</div>
+  <div id="sql-box" class="sql-box"></div>
+  <button class="copy" onclick="copySQL()" style="margin-top:10px">Copy SQL to Clipboard</button>
+</div>
+
+<div class="card" id="unmatched-card" style="display:none">
+  <div style="font-size:13px;font-weight:600;margin-bottom:8px;color:#b85c00">Unmatched Slugs (manual fix needed)</div>
+  <div id="unmatched-box" class="sql-box"></div>
+</div>
+
+<script>
+const SB_URL = 'https://eixsbmlytffcavjvhyeu.supabase.co';
+const SB_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImVpeHNibWx5dGZmY2F2anZoeWV1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzg4ODU0NDYsImV4cCI6MjA5NDQ2MTQ0Nn0._WPytpzCBglfKpwKr4ouNQH9Zfo22X5PBssF77hVn8Q';
+const API_KEY = '8305979203083184f47df530e707c2c9';
+const API_BASE = 'https://v3.football.api-sports.io';
+
+const TEAM_ID_MAP = {
+  fra:2,esp:9,bra:6,arg:26,eng:10,por:27,ger:25,usa:2384,ecu:2382,nor:1090,
+  ned:1118,mar:31,mex:16,bih:1113,civ:1501,jpn:12,kor:17,aus:20,nzl:4673,
+  rsa:1531,sen:13,gha:1504,tun:28,egy:32,uru:7,col:8,par:2380,can:5529,
+  pan:11,irn:22,sau:23,qat:1569,irq:1567,uzb:1568,sui:15,bel:1,cro:3,
+  sco:1108,tur:777,cze:770,aut:775,alg:1532,cgo:1508,cpv:1533,jor:1548,
+  hai:2386,cur:5530
+};
+
+let generatedSQL = '';
+
+function slugify(name) {
+  return name.toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^a-z0-9]/g, '');
+}
+
+function log(msg, type='') {
+  const el = document.getElementById('log');
+  el.style.display = 'block';
+  const div = document.createElement('div');
+  div.className = type;
+  div.textContent = msg;
+  el.appendChild(div);
+  el.scrollTop = el.scrollHeight;
+}
+
+function setProgress(pct) {
+  document.getElementById('progress-bar').style.width = pct + '%';
+}
+
+async function sbFetch(path) {
+  const r = await fetch(SB_URL + path, {
+    headers: { 'apikey': SB_KEY, 'Authorization': 'Bearer ' + SB_KEY }
+  });
+  return r.json();
+}
+
+async function apiFetch(path) {
+  await new Promise(r => setTimeout(r, 300)); // rate limit buffer
+  const r = await fetch(API_BASE + path, {
+    headers: { 'x-apisports-key': API_KEY }
+  });
+  return r.json();
+}
+
+async function runMapper() {
+  const btn = document.getElementById('btn-run');
+  btn.disabled = true;
+  btn.textContent = 'Running...';
+  setProgress(5);
+
+  // 1. Get all unique slugs from participants
+  log('Fetching all participant rosters...');
+  const data = await sbFetch('/rest/v1/participants?select=players');
+  const allSlugs = new Set();
+  for (const p of data) {
+    for (const s of (p.players || [])) {
+      if (s && s.includes('-')) allSlugs.add(s);
+    }
+  }
+  log(`Found ${allSlugs.size} unique player slugs`, 'ok');
+  setProgress(10);
+
+  // 2. Get existing mappings
+  log('Checking existing player_id_map...');
+  let existingMap = {};
+  try {
+    const ex = await sbFetch('/rest/v1/player_id_map?select=slug,api_id');
+    for (const r of ex) existingMap[r.slug] = r.api_id;
+    log(`${Object.keys(existingMap).length} slugs already mapped`, 'ok');
+  } catch(e) {
+    log('player_id_map table not found or empty', 'warn');
+  }
+
+  // 3. Find slugs needing mapping
+  const needsMapping = [...allSlugs].filter(s => !existingMap[s]);
+  log(`${needsMapping.length} slugs need mapping`);
+
+  // 4. Group by team code
+  const byTeam = {};
+  for (const slug of needsMapping) {
+    const code = slug.split('-')[0];
+    if (!byTeam[code]) byTeam[code] = [];
+    byTeam[code].push(slug);
+  }
+
+  const teams = Object.keys(byTeam);
+  log(`Fetching rosters for ${teams.length} teams from API...`);
+
+  // 5. Fetch each team's players from API
+  const matched = {};
+  const unmatched = [];
+  let teamsDone = 0;
+
+  for (const code of teams) {
+    const apiId = TEAM_ID_MAP[code];
+    if (!apiId) {
+      log(`No API ID for team code: ${code}`, 'warn');
+      for (const slug of byTeam[code]) unmatched.push(slug);
+      teamsDone++;
+      continue;
+    }
+
+    try {
+      const data = await apiFetch(`/players/squads?team=${apiId}`);
+      const players = data.response?.[0]?.players || [];
+      log(`${code.toUpperCase()}: got ${players.length} players from API`);
+
+      for (const slug of byTeam[code]) {
+        const namePart = slug.slice(code.length + 1); // remove "teamcode-"
+        
+        // Try multiple matching strategies
+        let best = null;
+        let bestScore = 0;
+
+        for (const p of players) {
+          const apiSlug = slugify(p.name);
+          
+          // Exact slug match
+          if (apiSlug === namePart) { best = p; bestScore = 100; break; }
+          
+          // Contains match both ways
+          if (apiSlug.includes(namePart) || namePart.includes(apiSlug)) {
+            const score = Math.min(apiSlug.length, namePart.length) / Math.max(apiSlug.length, namePart.length) * 90;
+            if (score > bestScore) { best = p; bestScore = score; }
+          }
+          
+          // Partial prefix match (first 6+ chars)
+          const minLen = Math.min(namePart.length, 6);
+          if (apiSlug.startsWith(namePart.slice(0, minLen)) || namePart.startsWith(apiSlug.slice(0, minLen))) {
+            const score = 60;
+            if (score > bestScore) { best = p; bestScore = score; }
+          }
+        }
+
+        if (best && bestScore >= 60) {
+          matched[slug] = { api_id: best.id, api_name: best.name, score: bestScore };
+          log(`  ✓ ${slug} → ${best.name} (id:${best.id}, score:${Math.round(bestScore)})`, 'ok');
+        } else {
+          unmatched.push(slug);
+          log(`  ✗ ${slug} — no match found`, 'warn');
+        }
+      }
+    } catch(e) {
+      log(`Error fetching ${code}: ${e.message}`, 'err');
+      for (const slug of byTeam[code]) unmatched.push(slug);
+    }
+
+    teamsDone++;
+    setProgress(10 + (teamsDone / teams.length) * 80);
+  }
+
+  setProgress(95);
+
+  // 6. Generate SQL
+  const rows = Object.entries(matched).map(([slug, {api_id, api_name}]) => {
+    const safe = api_name.replace(/'/g, "''");
+    return `('${slug}', ${api_id}, '${safe}')`;
+  });
+
+  if (rows.length > 0) {
+    generatedSQL = `-- Run this in Supabase SQL Editor\nINSERT INTO player_id_map (slug, api_id, api_name)\nVALUES\n${rows.join(',\n')}\nON CONFLICT (slug) DO UPDATE SET api_id = EXCLUDED.api_id, api_name = EXCLUDED.api_name;`;
+  } else {
+    generatedSQL = '-- No new mappings generated';
+  }
+
+  // 7. Update UI
+  document.getElementById('s-total').textContent = allSlugs.size;
+  document.getElementById('s-matched').textContent = Object.keys(matched).length;
+  document.getElementById('s-unmatched').textContent = unmatched.length;
+  document.getElementById('s-existing').textContent = Object.keys(existingMap).length;
+  document.getElementById('stats-card').style.display = 'block';
+
+  document.getElementById('sql-box').textContent = generatedSQL;
+  document.getElementById('sql-card').style.display = 'block';
+
+  if (unmatched.length > 0) {
+    document.getElementById('unmatched-box').textContent = unmatched.join('\n');
+    document.getElementById('unmatched-card').style.display = 'block';
+  }
+
+  setProgress(100);
+  log(`Done. ${Object.keys(matched).length} matched, ${unmatched.length} unmatched.`, 'ok');
+  btn.textContent = 'Run Again';
+  btn.disabled = false;
+}
+
+function copySQL() {
+  if (navigator.clipboard) {
+    navigator.clipboard.writeText(generatedSQL).then(() => {
+      const btn = document.querySelector('.copy');
+      btn.textContent = 'Copied!';
+      setTimeout(() => btn.textContent = 'Copy SQL to Clipboard', 2000);
+    });
+  } else {
+    const ta = document.createElement('textarea');
+    ta.value = generatedSQL;
+    document.body.appendChild(ta);
+    ta.select();
+    document.execCommand('copy');
+    document.body.removeChild(ta);
+  }
+}
+</script>
+</body>
+</html>
