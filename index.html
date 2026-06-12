@@ -1614,8 +1614,8 @@ function renderLB(){
       const pending=(p.players||[]).length===0;
       const med=i===0?'🥇':i===1?'🥈':i===2?'🥉':`${i+1}`;
       const flags=(p.teams||[]).map(id=>ALL_TEAMS.find(t=>t.id===id)?.flag||'').join(' ');
-      const tp=(p.teams||[]).reduce((s,id)=>s+teamPts(id),0);
-      const pp=(p.players||[]).reduce((s,id)=>s+(pPts(id)||0),0);
+      const tp=p._tp||0;
+      const pp=p._pp||0;
       const firstName=(p.name||'').split(' ')[0];
       const displayName=`${p.team_name||p.name} · ${firstName}`;
       const allP=getDisplayPlayers();
