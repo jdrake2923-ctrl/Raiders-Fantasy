@@ -1605,6 +1605,10 @@ function goTab(id,btn){
 }
 
 function renderLB(){
+  const scoreMap={};
+for(const p of S.participants){
+  if(p._breakdown)scoreMap[p.id]={player_breakdown:p._breakdown};
+}
   const me=S.currentParticipant;
   document.getElementById('tab-lb').innerHTML=
     `<div class="sec-head">${S.currentLeague.name.toUpperCase()} · ${S.participants.length} MANAGERS</div>
