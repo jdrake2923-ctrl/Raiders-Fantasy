@@ -1636,16 +1636,20 @@ function renderLB(){
           </div>
           <div style="font-size:10px;color:var(--muted);letter-spacing:2px;font-family:var(--fd);margin-bottom:6px">PLAYERS</div>
           <div style="display:grid;grid-template-columns:1fr 1fr;gap:4px">
-            ${myPlayers.map(pl=>`<div style="background:var(--bg3);border:1px solid var(--border);border-radius:6px;padding:6px 8px;display:flex;justify-content:space-between;align-items:center">
-              <div>
-                <div style="font-family:var(--fd);font-size:12px;color:var(--text)">${pl.name}</div>
-                <div style="display:flex;align-items:center;gap:4px;margin-top:2px">
-                  <span style="font-size:9px;color:${POS_C[pl.pos]||'var(--muted)'};font-family:var(--fd)">${pl.pos}</span>
-                  ${pl.flag?`<span style="font-size:10px">${pl.flag}</span>`:''}
-                </div>
-              </div>
-              ${pl.pts>0?`<span style="font-family:var(--fd);font-size:13px;color:var(--gold)">${pl.pts}</span>`:''}
-            </div>`).join('')}
+            ${(p.players||[]).map(slug=>{
+  const pl=findPlayerById(slug);
+  if(!pl)return'';
+  const pts=breakdown[slug]||0;
+  return`<div style="background:var(--bg3);border:1px solid var(--border);border-radius:6px;padding:6px 8px;display:flex;justify-content:space-between;align-items:center">
+    <div>
+      <div style="font-family:var(--fd);font-size:12px;color:var(--text)">${pl.name}</div>
+      <div style="display:flex;align-items:center;gap:4px;margin-top:2px">
+        <span style="font-size:9px;color:${POS_C[pl.pos]||'var(--muted)'};font-family:var(--fd)">${pl.pos}</span>
+        ${pl.flag?`<span style="font-size:10px">${pl.flag}</span>`:''}
+      </div>
+    </div>
+    <span style="font-family:var(--fd);font-size:13px;color:${pts>0?'var(--gold)':'var(--muted)'}">${pts}</span>
+  </div>`;}).join('')}
           </div>
         </div>`;
 
