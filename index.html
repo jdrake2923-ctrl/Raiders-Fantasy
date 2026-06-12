@@ -1573,7 +1573,7 @@ async function submitDraft(){
 // ═══════════════════════════════════════════════════════
 async function loadParts(){
   const{data}=await db.from('participants').select('*').eq('league_id',S.currentLeague.id);
-  const{data:scores}=await db.from('scores').select('participant_id,team_points,player_points,total_points');
+  const{data:scores}=await db.from('scores').select('participant_id,team_points,player_points,player_breakdown,total_points');
   const scoreMap={};
   for(const s of (scores||[])){scoreMap[s.participant_id]=s;}
   S.participants=(data||[]).map(p=>{
@@ -1581,9 +1581,8 @@ async function loadParts(){
     const total=sc?sc.total_points:calcScore(p);
     const tp=sc?sc.team_points:(p.teams||[]).reduce((s,id)=>s+teamPts(id),0);
     const pp=sc?sc.player_points:0;
-    return{...p,_sc:total,_tp:tp,_pp:pp};
+    return{...p,_sc:total,_tp:tp,_pp:pp,_breakdown:sc?.player_breakdown||{}};
   }).sort((a,b)=>b._sc-a._sc);
-  // Refresh currentParticipant from live DB data to stay in sync
   if(S.currentParticipant){
     const fresh=S.participants.find(p=>p.id===S.currentParticipant.id);
     if(fresh){
