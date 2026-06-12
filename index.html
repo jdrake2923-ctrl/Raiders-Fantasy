@@ -1621,6 +1621,7 @@ function renderLB(){
       const allP=getDisplayPlayers();
       const myTeams=ALL_TEAMS.filter(t=>(p.teams||[]).includes(t.id));
       const myPlayers=(p.players||[]).map(id=>findPlayerById(id)).filter(Boolean);
+      const breakdown=scoreMap[p.id]?.player_breakdown||{};
 
       const expandedHtml=pending?
         `<div style="padding:10px 0 4px;font-size:12px;color:var(--gold)">⏳ Player draft pending</div>`:
