@@ -300,12 +300,57 @@ select option{background:var(--bg2)}
         </div>
         <div class="cd-note">Pick your 3 teams now. <strong>Player draft opens June 2</strong> once rosters are confirmed. Tournament kicks off <strong>June 11.</strong></div>
       </div>
-      <div style="font-family:var(--fd);font-size:12px;letter-spacing:2px;color:var(--muted);margin-bottom:10px">SELECT YOUR LEAGUE</div>
-      <div class="ll" id="league-list"><div class="loading"><div class="spin"></div> Loading...</div></div>
       <div style="display:flex;gap:16px;flex-wrap:wrap;margin-top:10px">
-        <button class="txt-link" onclick="showCommLogin()">⚙️ Commissioner Login</button>
-        <button class="txt-link" onclick="goGroups()">🌍 View All 48 Teams &amp; Groups</button>
-      </div>
+  <button class="txt-link" onclick="showCommLogin()">⚙️ Commissioner Login</button>
+  <button class="txt-link" onclick="goGroups()">🌍 View All 48 Teams &amp; Groups</button>
+</div>
+
+<!-- CELEBRATION BANNER -->
+<div style="background:linear-gradient(135deg,#1a2a1a,#0f1f0f);border:1px solid var(--gold);border-radius:14px;padding:22px;margin-top:28px;text-align:center;box-shadow:0 0 40px #F5A62318">
+  <div style="font-family:var(--fd);font-size:13px;letter-spacing:4px;color:var(--gold);margin-bottom:6px">🏆 WORLD CUP 2026 · FINAL STANDINGS 🏆</div>
+  <div style="font-family:var(--fd);font-size:32px;font-weight:700;color:var(--text);line-height:1.1;margin-bottom:8px">SPAIN ARE<span style="color:var(--gold);display:block">WORLD CHAMPIONS</span></div>
+  <div style="font-size:13px;color:var(--muted);line-height:1.7;margin-bottom:18px">
+    Thank you to all <strong style="color:var(--text)">91 managers</strong> across 5 leagues for an incredible tournament.<br>
+    104 matches, thousands of points, and one unforgettable World Cup.<br>
+    <strong style="color:var(--gold2)">See you at the next one. ⚽</strong>
+  </div>
+</div>
+
+<!-- TOP 10 -->
+<div style="margin-top:20px">
+  <div style="font-family:var(--fd);font-size:12px;letter-spacing:3px;color:var(--muted);margin-bottom:12px;text-align:center">🥇 FINAL TOP 10 · ALL LEAGUES</div>
+  <div id="top10-list">
+    ${[
+      {rank:'🥇', team:'The Toe-Ballers', name:'Liam', pts:617, tp:63, pp:554, league:'Raiders Players'},
+      {rank:'🥈', team:'Goal Diggers', name:'Reese', pts:589, tp:24, pp:565, league:'Raiders Players'},
+      {rank:'🥉', team:'Buckminsterfullerene', name:'Jack', pts:587, tp:62, pp:525, league:'Raiders Parents'},
+      {rank:'4', team:'YNWA', name:'Ronan', pts:574, tp:46, pp:528, league:'Raiders Players'},
+      {rank:'5', team:'CR7theGOATTTT', name:'Jackson', pts:569, tp:47, pp:522, league:'Elite'},
+      {rank:'6', team:'Abstracting', name:'Scarlett', pts:560, tp:47, pp:513, league:'Raiders Players'},
+      {rank:'7', team:'Flood Smash FC', name:'RyAnn', pts:555, tp:63, pp:492, league:'Raiders Parents'},
+      {rank:'8', team:'Real Goat It\'s Me', name:'Ryko', pts:550, tp:47, pp:503, league:'Elite'},
+      {rank:'9', team:'Triple P\'s Ballers', name:'Perry', pts:544, tp:33, pp:511, league:'Raiders Players'},
+      {rank:'10', team:'Man City Man', name:'Mason', pts:543, tp:47, pp:496, league:'Raiders Players'},
+    ].map((p,i)=>`
+      <div class="lb-row" style="margin-bottom:6px;${i<3?'border-color:var(--gold);background:#F5A62308':''}">
+        <div class="lb-rank" style="font-size:${i<3?'20':'14'}px;min-width:32px;text-align:center">${p.rank}</div>
+        <div class="lb-info">
+          <div class="lb-name" style="${i<3?'color:var(--gold)':''}">${p.team} · ${p.name}</div>
+          <div style="font-size:10px;color:var(--muted);font-family:var(--fd);letter-spacing:1px;margin-top:2px">${p.league} · ${p.tp} team · ${p.pp} player</div>
+        </div>
+        <div class="lb-s">
+          <div class="lb-pts" style="font-size:${i<3?'26':'20'}px">${p.pts}</div>
+          <div class="lb-pl">PTS</div>
+        </div>
+      </div>`).join('')}
+  </div>
+</div>
+
+<!-- GLOBAL STANDINGS -->
+<div style="margin-top:24px">
+  <div style="font-family:var(--fd);font-size:12px;letter-spacing:3px;color:var(--muted);margin-bottom:10px;text-align:center">ALL MANAGERS · FULL STANDINGS</div>
+  <div id="global-lb"><div class="loading"><div class="spin"></div> Loading...</div></div>
+</div>
     </div>
   </div>
 
