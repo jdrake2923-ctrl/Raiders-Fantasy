@@ -320,29 +320,57 @@ select option{background:var(--bg2)}
 <div style="margin-top:20px">
   <div style="font-family:var(--fd);font-size:12px;letter-spacing:3px;color:var(--muted);margin-bottom:12px;text-align:center">🥇 FINAL TOP 10 · ALL LEAGUES</div>
   <div id="top10-list">
-    ${[
-      {rank:'🥇', team:'The Toe-Ballers', name:'Liam', pts:617, tp:63, pp:554, league:'Raiders Players'},
-      {rank:'🥈', team:'Goal Diggers', name:'Reese', pts:589, tp:24, pp:565, league:'Raiders Players'},
-      {rank:'🥉', team:'Buckminsterfullerene', name:'Jack', pts:587, tp:62, pp:525, league:'Raiders Parents'},
-      {rank:'4', team:'YNWA', name:'Ronan', pts:574, tp:46, pp:528, league:'Raiders Players'},
-      {rank:'5', team:'CR7theGOATTTT', name:'Jackson', pts:569, tp:47, pp:522, league:'Elite'},
-      {rank:'6', team:'Abstracting', name:'Scarlett', pts:560, tp:47, pp:513, league:'Raiders Players'},
-      {rank:'7', team:'Flood Smash FC', name:'RyAnn', pts:555, tp:63, pp:492, league:'Raiders Parents'},
-      {rank:'8', team:'Real Goat It\'s Me', name:'Ryko', pts:550, tp:47, pp:503, league:'Elite'},
-      {rank:'9', team:'Triple P\'s Ballers', name:'Perry', pts:544, tp:33, pp:511, league:'Raiders Players'},
-      {rank:'10', team:'Man City Man', name:'Mason', pts:543, tp:47, pp:496, league:'Raiders Players'},
-    ].map((p,i)=>`
-      <div class="lb-row" style="margin-bottom:6px;${i<3?'border-color:var(--gold);background:#F5A62308':''}">
-        <div class="lb-rank" style="font-size:${i<3?'20':'14'}px;min-width:32px;text-align:center">${p.rank}</div>
-        <div class="lb-info">
-          <div class="lb-name" style="${i<3?'color:var(--gold)':''}">${p.team} · ${p.name}</div>
-          <div style="font-size:10px;color:var(--muted);font-family:var(--fd);letter-spacing:1px;margin-top:2px">${p.league} · ${p.tp} team · ${p.pp} player</div>
-        </div>
-        <div class="lb-s">
-          <div class="lb-pts" style="font-size:${i<3?'26':'20'}px">${p.pts}</div>
-          <div class="lb-pl">PTS</div>
-        </div>
-      </div>`).join('')}
+  <div class="lb-row" style="margin-bottom:6px;border-color:var(--gold);background:#F5A62308">
+    <div class="lb-rank" style="font-size:20px;min-width:32px;text-align:center">🥇</div>
+    <div class="lb-info"><div class="lb-name" style="color:var(--gold)">The Toe-Ballers · Liam</div><div style="font-size:10px;color:var(--muted);font-family:var(--fd);letter-spacing:1px;margin-top:2px">Raiders Players · 63 team · 554 player</div></div>
+    <div class="lb-s"><div class="lb-pts" style="font-size:26px">617</div><div class="lb-pl">PTS</div></div>
+  </div>
+  <div class="lb-row" style="margin-bottom:6px;border-color:var(--gold);background:#F5A62308">
+    <div class="lb-rank" style="font-size:20px;min-width:32px;text-align:center">🥈</div>
+    <div class="lb-info"><div class="lb-name" style="color:var(--gold)">Goal Diggers · Reese</div><div style="font-size:10px;color:var(--muted);font-family:var(--fd);letter-spacing:1px;margin-top:2px">Raiders Players · 24 team · 565 player</div></div>
+    <div class="lb-s"><div class="lb-pts" style="font-size:26px">589</div><div class="lb-pl">PTS</div></div>
+  </div>
+  <div class="lb-row" style="margin-bottom:6px;border-color:var(--gold);background:#F5A62308">
+    <div class="lb-rank" style="font-size:20px;min-width:32px;text-align:center">🥉</div>
+    <div class="lb-info"><div class="lb-name" style="color:var(--gold)">Buckminsterfullerene · Jack</div><div style="font-size:10px;color:var(--muted);font-family:var(--fd);letter-spacing:1px;margin-top:2px">Raiders Parents · 62 team · 525 player</div></div>
+    <div class="lb-s"><div class="lb-pts" style="font-size:26px">587</div><div class="lb-pl">PTS</div></div>
+  </div>
+  <div class="lb-row" style="margin-bottom:6px">
+    <div class="lb-rank" style="font-size:14px;min-width:32px;text-align:center">4</div>
+    <div class="lb-info"><div class="lb-name">YNWA · Ronan</div><div style="font-size:10px;color:var(--muted);font-family:var(--fd);letter-spacing:1px;margin-top:2px">Raiders Players · 46 team · 528 player</div></div>
+    <div class="lb-s"><div class="lb-pts" style="font-size:20px">574</div><div class="lb-pl">PTS</div></div>
+  </div>
+  <div class="lb-row" style="margin-bottom:6px">
+    <div class="lb-rank" style="font-size:14px;min-width:32px;text-align:center">5</div>
+    <div class="lb-info"><div class="lb-name">CR7theGOATTTT · Jackson</div><div style="font-size:10px;color:var(--muted);font-family:var(--fd);letter-spacing:1px;margin-top:2px">Elite · 47 team · 522 player</div></div>
+    <div class="lb-s"><div class="lb-pts" style="font-size:20px">569</div><div class="lb-pl">PTS</div></div>
+  </div>
+  <div class="lb-row" style="margin-bottom:6px">
+    <div class="lb-rank" style="font-size:14px;min-width:32px;text-align:center">6</div>
+    <div class="lb-info"><div class="lb-name">Abstracting · Scarlett</div><div style="font-size:10px;color:var(--muted);font-family:var(--fd);letter-spacing:1px;margin-top:2px">Raiders Players · 47 team · 513 player</div></div>
+    <div class="lb-s"><div class="lb-pts" style="font-size:20px">560</div><div class="lb-pl">PTS</div></div>
+  </div>
+  <div class="lb-row" style="margin-bottom:6px">
+    <div class="lb-rank" style="font-size:14px;min-width:32px;text-align:center">7</div>
+    <div class="lb-info"><div class="lb-name">Flood Smash FC · RyAnn</div><div style="font-size:10px;color:var(--muted);font-family:var(--fd);letter-spacing:1px;margin-top:2px">Raiders Parents · 63 team · 492 player</div></div>
+    <div class="lb-s"><div class="lb-pts" style="font-size:20px">555</div><div class="lb-pl">PTS</div></div>
+  </div>
+  <div class="lb-row" style="margin-bottom:6px">
+    <div class="lb-rank" style="font-size:14px;min-width:32px;text-align:center">8</div>
+    <div class="lb-info"><div class="lb-name">Real Goat It's Me · Ryko</div><div style="font-size:10px;color:var(--muted);font-family:var(--fd);letter-spacing:1px;margin-top:2px">Elite · 47 team · 503 player</div></div>
+    <div class="lb-s"><div class="lb-pts" style="font-size:20px">550</div><div class="lb-pl">PTS</div></div>
+  </div>
+  <div class="lb-row" style="margin-bottom:6px">
+    <div class="lb-rank" style="font-size:14px;min-width:32px;text-align:center">9</div>
+    <div class="lb-info"><div class="lb-name">Triple P's Ballers · Perry</div><div style="font-size:10px;color:var(--muted);font-family:var(--fd);letter-spacing:1px;margin-top:2px">Raiders Players · 33 team · 511 player</div></div>
+    <div class="lb-s"><div class="lb-pts" style="font-size:20px">544</div><div class="lb-pl">PTS</div></div>
+  </div>
+  <div class="lb-row" style="margin-bottom:6px">
+    <div class="lb-rank" style="font-size:14px;min-width:32px;text-align:center">10</div>
+    <div class="lb-info"><div class="lb-name">Man City Man · Mason</div><div style="font-size:10px;color:var(--muted);font-family:var(--fd);letter-spacing:1px;margin-top:2px">Raiders Players · 47 team · 496 player</div></div>
+    <div class="lb-s"><div class="lb-pts" style="font-size:20px">543</div><div class="lb-pl">PTS</div></div>
+  </div>
+</div>
   </div>
 </div>
 
