@@ -1183,6 +1183,7 @@ async function loadLeagues(){
       const{count}=await db.from('participants').select('*',{count:'exact',head:true});
       document.getElementById('mgr-count').textContent=count||0;
     }catch(e){console.warn('Count error:',e);}
+loadGlobalLB();
   }catch(e){
     console.error('League load exception:',e);
     document.getElementById('league-list').innerHTML=`<div class="alert a-err">Failed to load leagues. Please refresh.<br>${e.message}</div>`;
@@ -2245,7 +2246,43 @@ async function init(){
   },5*60*1000);
   await handleUrl();
 }
-document.addEventListener('DOMContentLoaded',init);
+async function loadGlobalLB(){
+  try{
+    const el=document.getElementById('global-lb');
+    if(!el)return;
+    const{data:parts}=await db.from('participants').select('id,name,team_name,teams,league_id');
+    const{data:scores}=await db.from('scores').select('participant_id,total_points,team_points,player_points');
+    if(!parts||!scores){el.innerHTML='<div style="color:var(--muted);font-size:13px">No data yet.</div>';return;}
+    const scoreMap={};
+    for(const s of scores)scoreMap[s.participant_id]=s;
+    const ranked=parts
+      .map(p=>({...p,_sc:scoreMap[p.id]?.total_points||0,_tp:scoreMap[p.id]?.team_points||0,_pp:scoreMap[p.id]?.player_points||0}))
+      .filter(p=>p._sc>0)
+      .sort((a,b)=>b._sc-a._sc);
+    if(!ranked.length){el.innerHTML='<div style="color:var(--muted);font-size:13px">No scores yet.</div>';return;}
+    const leagueMap={};
+    for(const l of S.leagues)leagueMap[l.id]=l.name;
+    el.innerHTML=ranked.map((p,i)=>{
+      const med=i===0?'🥇':i===1?'🥈':i===2?'🥉':`${i+1}`;
+      const flags=(p.teams||[]).map(id=>ALL_TEAMS.find(t=>t.id===id)?.flag||'').join(' ');
+      const firstName=(p.name||'').split(' ')[0];
+      const league=leagueMap[p.league_id]||'';
+      return`<div class="lb-row" style="margin-bottom:5px">
+        <div class="lb-rank" style="font-size:${i<3?'18':'13'}px;min-width:28px;text-align:center">${med}</div>
+        <div class="lb-info">
+          <div class="lb-name">${p.team_name||p.name} · ${firstName}</div>
+          <div class="lb-flags" style="font-size:12px">${flags}</div>
+          <div style="font-size:10px;color:var(--muted);font-family:var(--fd);letter-spacing:1px">${league}</div>
+        </div>
+        <div class="lb-s">
+          <div class="lb-pts" style="font-size:20px">${p._sc}</div>
+          <div class="lb-pl">PTS</div>
+        </div>
+      </div>`;
+    }).join('');
+  }catch(e){console.warn('Global LB error:',e);}
+}
+  document.addEventListener('DOMContentLoaded',init);
 </script>
 </body>
 </html>
